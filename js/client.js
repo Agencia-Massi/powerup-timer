@@ -31,7 +31,7 @@ TrelloPowerUp.initialize({
                     icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                     text: 'Iniciar',
                     callback: function(t){
-                        var now = new Date().toDateString()
+                        var now = new Date().toISOString()
 
                         return t.set('card', 'shared', 'startTime', now).then(function(){
                             return t.alert({
@@ -47,19 +47,3 @@ TrelloPowerUp.initialize({
     )}
 })
 
-
-/*
-TrelloPowerUp.initialize({
-    'card-buttons': function(t, options) {
-        return [{
-            icon: `${GITHUB_PAGES_BASE}/img/icon.svg`, 
-            text: 'Timer teste',
-            callback: function(t) {
-                return t.alert({
-                    message: 'O powerup está ativo!',
-                    duration: 5,
-                });
-            }
-        }];
-    },
-});*/
