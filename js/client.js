@@ -34,7 +34,8 @@ TrelloPowerUp.initialize({
                             cardId: currentCardId,
                             duration: durationSeconds,
                             date: new Date().toISOString(),
-                            memberId: context.member
+                            memberId: context.member,
+                            action: "manual_stop"
                         }
 
                         sendToN8n(newLog)
@@ -58,7 +59,7 @@ TrelloPowerUp.initialize({
             }
             
             else{
-                var btnText = '▶Iniciar'
+                var btnText = 'Iniciar'
                 if(activeTimer){
                     btnText = 'Iniciar (Pausará Timer Anterior)'
                 }
@@ -67,11 +68,33 @@ TrelloPowerUp.initialize({
                     icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                     text: btnText,
                     callback: function(t){
-                        var now = new Date().toISOString()
+                        var now = new Date()
+
+                        var previousTimerPromisse = Promise.resolve()
+
+                        if(activeTimer){
+                            var startPrev = new Date(activeTimer.startTime)
+                            var durationPrevMs = now - startPrev
+                            var durationPrevSeconds = Math.round(durationPrevMs / 1000)
+                            
+                            var previousLog = {
+                                cardId: activeTimer.cardId,
+                                duration: durationPrevSeconds,
+                                date: now.toISOString(),
+                                memberId: activeTimer.memberId,
+                                action: "auto_stop_by_new_timer"
+                            }
+
+                            sendToN8n(previousLog)
+                            t.alert({
+                                message: `Timer anterior (${durationPrevSeconds}s) enviado ao n8n`,
+                                duration: 2
+                            })
+                        }
 
                         return t.set('member', 'private', 'activeTimer',{ 
                             cardId: currentCardId,
-                            startTime: now,
+                            startTime: now.toISOString(),
                             memberId: context.member
                         }).then(function(){
                             return t.alert({
@@ -88,11 +111,12 @@ TrelloPowerUp.initialize({
     'card-detail-badges': function(t, options) {
         return t.get('member', 'private', 'activeTimer')
         .then(function(activeTimer) {
-            if (activeTimer && activeTimer.memberId === t.getContext().member) {
+            
+            if (activeTimer && activeTimer.memberId === t.getContext().member && activeTimer.cardId === t.getContext().card) {
                 return [{
                     dynamic: function() {
                         return {
-                            title: "Tempo Ativo", 
+                            title: "Tempo Ativo",   
                             text: `RODANDO`,
                             color: "green",
                             callback: function(t) {
