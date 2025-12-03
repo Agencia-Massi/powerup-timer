@@ -58,6 +58,30 @@ TrelloPowerUp.initialize({
     )},
     
     'card-detail-badges': function(t, options) {
-        return []; 
-    } 
+    // A lógica de estado é a mesma: verifica se há um startTime salvo.
+    return t.get('card', 'shared', 'startTime')
+    .then(function(startTime) {
+        
+        if (startTime) {
+            // Se estiver rodando, mostra um selo verde
+            return [{
+                dynamic: function() {
+                    // Aqui você pode adicionar lógica de tempo em tempo real, mas por enquanto, só o status
+                    return {
+                        title: "Tempo Ativo", // Título da tooltip
+                        text: "⏳ RODANDO",
+                        color: "green", // Cor verde para indicar atividade
+                        callback: function(t) {
+                            // Clicar no badge pode te levar para o botão de Parar, se necessário.
+                            return t.alert({ message: "Use o botão na aba Power-Ups para PAUSAR." });
+                        }
+                    }
+                }
+            }];
+        } else {
+            // Se estiver parado, não mostra selo, ou mostra cinza
+            return []; // Array vazio significa que nada será exibido
+        }
+    });
+},
 });
