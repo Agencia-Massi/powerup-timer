@@ -1,4 +1,4 @@
-var Promise = TrelloPowerUp.Promise
+var Promise = TrelloPowerUp.Promise;
 
 const GITHUB_PAGES_BASE = 'https://miguelnsimoes.github.io/meu-trello-timer';
 
@@ -14,7 +14,7 @@ TrelloPowerUp.initialize({
                         var endTime = new Date()
                         var start = new Date(startTime)
                         var durationMs = endTime - start
-                        var durationSeconds = Math.round((endTime - start) / 1000)
+                        var durationSeconds = Math.round(durationMs / 1000)
 
                         var newLog = {
                             duration: durationSeconds,
@@ -33,7 +33,6 @@ TrelloPowerUp.initialize({
                                     })
                                 })
                             })
-
                         })
                     } 
                 }]
@@ -55,8 +54,10 @@ TrelloPowerUp.initialize({
                     }
                 }]
             }
-            
         }
-    )}
-})
-
+    )},
+    
+    'card-detail-badges': function(t, options) {
+        return []; 
+    } 
+});
