@@ -13,16 +13,29 @@ TrelloPowerUp.initialize({
                     callback: function(t) {
                         var endTime = new Date()
                         var start = new Date(startTime)
+                        var durationMs = endTime - start
                         var durationSeconds = Math.round((endTime - start) / 1000)
 
-                        return t.remove('card', 'shared', 'startTime').then(function(){
-                            return t.alert({
-                                message: `Tempo Registrado: ${durationSeconds} segundos!`,
-                                duration: 5,
-                                display: 'sucess'
+                        var newLog = {
+                            duration: durationSeconds,
+                            date: new Date().toISOString(),
+                        }
+
+                        return t.get('card', 'shared', 'timeLogs', []).then(function(timeLogs){
+                            timeLogs.push(newLog)
+
+                            return t.set('card', 'shared', 'timelogs', timeLogs).then(function(){
+                                return t.remove('card', 'shared', 'startTime').then(function(){
+                                    return t.alert({
+                                        message: `Log salvo! Duração: ${durationSeconds} segundos.`,
+                                        duration: 5,
+                                        display: 'success'
+                                    })
+                                })
                             })
+
                         })
-                    }
+                    } 
                 }]
             }
             
