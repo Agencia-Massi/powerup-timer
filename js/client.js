@@ -1,5 +1,3 @@
-
-
 var Promise = TrelloPowerUp.Promise;
 
 var N8N_WEBHOOK_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev/webhook-test/bfc8317c-a794-4364-81e2-2ca172cfb558'; 
@@ -54,14 +52,27 @@ TrelloPowerUp.initialize({
 
                         sendToN8n(newLog)
 
-                        return t.get('card', 'shared', 'timeLogs', []).then(function(timeLogs){
-                            timeLogs.push(newLog)
+                        return Promise.all([
+                            t.get('card', 'shared', 'timeLogs', []),
+                            t.get('card', 'shared', 'accumulatedTime', 0)
+                            
+                        ]).then(function(values){
+                            var timeLogs = values[0];
+                            var currentTotal = values[1];
 
-                            return t.set('card', 'shared', 'timeLogs', timeLogs).then(function(){ 
+                            timeLogs.push(newLog);
+                            var newTotal = currentTotal + durationSeconds;
+
+                            return t.set('card', 'shared', 'timeLogs', timeLogs)
+                            .then(function(){
+                               
+                                return t.set('card', 'shared', 'accumulatedTime', newTotal);
+                            })
+                            .then(function(){ 
 
                                 return t.set('member', 'private', 'activeTimer', null).then(function(){
                                     return t.alert({
-                                        message: `Log salvo! Enviado ao n8n.`,
+                                        message: `Pausado! Total acumulado: ${formatTime(newTotal)}`,
                                         duration: 5,
                                         display: 'success'
                                     })
@@ -74,10 +85,7 @@ TrelloPowerUp.initialize({
             
             else{
                 var btnText = 'Iniciar'
-                if(activeTimer){
-                    btnText = 'Iniciar (Pausará Timer Anterior)'
-                }
-                
+
                 return[{
                     icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                     text: btnText,
@@ -120,46 +128,71 @@ TrelloPowerUp.initialize({
     )},
 
     'card-badges': function(t, options){
-        return t.get('member', 'private', 'activeTimer').then(function(activeTimer){
-            if(activeTimer && activeTimer.cardId === t.getContext().card){
-                return[{
+        return Promise.all([
+            t.get('member', 'private', 'activeTimer'),
+            t.get('card', 'shared', 'accumulatedTime', 0)
+        ]).then(function(values){
+            var activeTimer = values[0];
+            var accumulated = values[1];
+            
+            var isRunningHere = (activeTimer && activeTimer.cardId === t.getContext().card);
+            
+            if (accumulated > 0 || isRunningHere) {
+                return [{
                     dynamic: function(){
-                        var now = new Date()
-                        var start = new Date(activeTimer.startTime)
-                        var diff = Math.floor((now - start) / 1000)
+                        var displayTime = accumulated;
+
+                        if (isRunningHere) {
+                            var now = new Date();
+                            var start = new Date(activeTimer.startTime);
+                            var currentSession = Math.floor((now - start) / 1000);
+                            displayTime += currentSession;
+                        }
 
                         return {
-                            text: '⏱️ ' + formatTime(diff),
-                            color: 'green',
-                            refresh: 1
+                            text: '⏱️ ' + formatTime(displayTime),
+                            color: isRunningHere ? 'green' : null, 
+                            refresh: isRunningHere ? 1 : 60
                         }
                     }
-                }]
+                }];
             } else {
-                return []; 
+                return [];
             }
-        })
-    },
+    })
+ },
+
 
     'card-detail-badges': function(t, options) {
-        return t.get('member', 'private', 'activeTimer')
-        .then(function(activeTimer) {
+        return Promise.all([
+            t.get('member', 'private', 'activeTimer'),
+            t.get('card', 'shared', 'accumulatedTime', 0)
+        ]).then(function(values){
+            var activeTimer = values[0];
+            var accumulated = values[1];
             
-            if (activeTimer && activeTimer.memberId === t.getContext().member && activeTimer.cardId === t.getContext().card) {
+            var isRunningHere = (activeTimer && activeTimer.cardId === t.getContext().card && activeTimer.memberId === t.getContext().member);
+
+            if (accumulated > 0 || isRunningHere) {
                 return [{
                     dynamic: function() {
+                        var displayTime = accumulated;
 
-                        var now = new Date()
-                        var start = new Date(activeTimer.startTime)
-                        var diff = Math.floor((now - start) / 1000)
+                        if (isRunningHere) {
+                            var now = new Date();
+                            var start = new Date(activeTimer.startTime);
+                            var currentSession = Math.floor((now - start) / 1000);
+                            displayTime += currentSession;
+                        }
 
                         return {
-                            title: "Tempo Ativo",   
-                            text: formatTime(diff),
-                            color: "green",
-                            refresh: 1,
+                            title: isRunningHere ? "Tempo Ativo" : "Total Acumulado",   
+                            text: formatTime(displayTime),
+                            color: isRunningHere ? "green" : null,
+                            refresh: isRunningHere ? 1 : 60,
                             callback: function(t) {
-                                return t.alert({ message: "Timer ativo! Clique no botão na aba Power-Ups para PAUSAR." });
+                                var msg = isRunningHere ? "Timer rodando! Pause para salvar." : "Timer pausado. Clique em Iniciar para continuar.";
+                                return t.alert({ message: msg });
                             }
                         }
                     }
@@ -169,5 +202,3 @@ TrelloPowerUp.initialize({
             }
         });
     }
-
-});
