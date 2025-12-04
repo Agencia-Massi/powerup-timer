@@ -13,6 +13,18 @@ function sendToN8n(logData) {
     });
 }
 
+function formatTime(totalSeconds) {
+    var hours = Math.floor(totalSeconds / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+    var seconds = Math.floor(totalSeconds % 60);
+
+    var h = hours > 0 ? hours + ':' : '';
+    var m = (minutes < 10 ? '0' : '') + minutes;
+    var s = (seconds < 10 ? '0' : '') + seconds;
+
+    return h + m + ':' + s;
+}
+
 TrelloPowerUp.initialize({
     'card-buttons': function(t, options){
         var context = t.getContext()
@@ -69,9 +81,7 @@ TrelloPowerUp.initialize({
                     text: btnText,
                     callback: function(t){
                         var now = new Date()
-
-                        var previousTimerPromisse = Promise.resolve()
-
+     
                         if(activeTimer){
                             var startPrev = new Date(activeTimer.startTime)
                             var durationPrevMs = now - startPrev
@@ -91,7 +101,6 @@ TrelloPowerUp.initialize({
                                 duration: 2
                             })
                         }
-
                         return t.set('member', 'private', 'activeTimer',{ 
                             cardId: currentCardId,
                             startTime: now.toISOString(),
@@ -108,6 +117,30 @@ TrelloPowerUp.initialize({
         }
     )},
 
+    'card-badges': function(t, options){
+        return t.get('member', 'private', 'activeTimer').then(function(activeTimer){
+            if(activeTimer && activeTimer.cardId === t.getContext().card){
+                return[{
+                    dynamic: function(){
+                        var now = new Date()
+                        var start = new Date(activeTimer.startTime)
+                        var diff = Math.floor((now - start) / 1000)
+
+                        return {
+                            text: '⏱️ ' + formatTime(diff),
+                            color: 'green',
+                            refresh: 1
+                        }   
+                    }
+                }]
+            }
+
+            else{
+                return[]
+            }
+        })
+    },
+
     'card-detail-badges': function(t, options) {
         return t.get('member', 'private', 'activeTimer')
         .then(function(activeTimer) {
@@ -115,10 +148,16 @@ TrelloPowerUp.initialize({
             if (activeTimer && activeTimer.memberId === t.getContext().member && activeTimer.cardId === t.getContext().card) {
                 return [{
                     dynamic: function() {
+
+                        var now = new Date()
+                        var start = new Date(activeTimer.startTime)
+                        var diff = Math.floor((now - start) / 1000)
+
                         return {
                             title: "Tempo Ativo",   
-                            text: `RODANDO`,
+                            text: formatTime(diff),
                             color: "green",
+                            refresh: 1,
                             callback: function(t) {
                                 return t.alert({ message: "Timer ativo! Clique no botão na aba Power-Ups para PAUSAR." });
                             }
