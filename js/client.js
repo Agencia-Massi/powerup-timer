@@ -55,7 +55,6 @@ TrelloPowerUp.initialize({
                         return Promise.all([
                             t.get('card', 'shared', 'timeLogs', []),
                             t.get('card', 'shared', 'accumulatedTime', 0)
-                            
                         ]).then(function(values){
                             var timeLogs = values[0];
                             var currentTotal = values[1];
@@ -65,11 +64,9 @@ TrelloPowerUp.initialize({
 
                             return t.set('card', 'shared', 'timeLogs', timeLogs)
                             .then(function(){
-                               
                                 return t.set('card', 'shared', 'accumulatedTime', newTotal);
                             })
                             .then(function(){ 
-
                                 return t.set('member', 'private', 'activeTimer', null).then(function(){
                                     return t.alert({
                                         message: `Pausado! Total acumulado: ${formatTime(newTotal)}`,
@@ -104,7 +101,6 @@ TrelloPowerUp.initialize({
                                 memberId: activeTimer.memberId,
                                 action: "auto_stop_by_new_timer"
                             }
-
                             sendToN8n(previousLog)
                             t.alert({
                                 message: `Timer anterior (${durationPrevSeconds}s) enviado ao n8n`,
@@ -202,3 +198,4 @@ TrelloPowerUp.initialize({
             }
         });
     }
+});
