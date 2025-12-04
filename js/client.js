@@ -1,3 +1,5 @@
+
+
 var Promise = TrelloPowerUp.Promise;
 
 var N8N_WEBHOOK_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev/webhook-test/bfc8317c-a794-4364-81e2-2ca172cfb558'; 
@@ -130,15 +132,13 @@ TrelloPowerUp.initialize({
                             text: '⏱️ ' + formatTime(diff),
                             color: 'green',
                             refresh: 1
-                        }   
+                        }
                     }
                 }]
+            } else {
+                return []; 
             }
-
-            else{
-                return[];
-            }
-        });
+        })
     },
 
     'card-detail-badges': function(t, options) {
