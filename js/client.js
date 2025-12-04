@@ -136,9 +136,9 @@ TrelloPowerUp.initialize({
             }
 
             else{
-                return[]
+                return[];
             }
-        })
+        });
     },
 
     'card-detail-badges': function(t, options) {
