@@ -51,7 +51,7 @@ TrelloPowerUp.initialize({
                         }
 
                         sendToN8n(newLog)
-
+                        
                         return Promise.all([
                             t.get('card', 'shared', 'timeLogs', []),
                             t.get('card', 'shared', 'accumulatedTime', 0)
@@ -63,16 +63,14 @@ TrelloPowerUp.initialize({
                             var newTotal = currentTotal + durationSeconds;
 
                             return t.set('card', 'shared', 'timeLogs', timeLogs)
-                            .then(function(){
-                                return t.set('card', 'shared', 'accumulatedTime', newTotal);
-                            })
-                            .then(function(){ 
-                                return t.set('member', 'private', 'activeTimer', null).then(function(){
-                                    return t.alert({
-                                        message: `Pausado! Total acumulado: ${formatTime(newTotal)}`,
-                                        duration: 5,
-                                        display: 'success'
-                                    })
+                            .then(() => t.set('card', 'shared', 'accumulatedTime', newTotal))
+                            .then(() => t.set('member', 'private', 'activeTimer', null))
+                            .then(() => {
+                                // 4. ALERTA APENAS DEPOIS QUE TUDO SALVOU
+                                return t.alert({
+                                    message: `Pausado! Total acumulado: ${formatTime(newTotal)}`,
+                                    duration: 5,
+                                    display: 'success'
                                 })
                             })
                         })
