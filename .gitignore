@@ -1,0 +1,5 @@
+/backend-node/node_modules
+
+npm-debug.log
+.ngrok2
+.vscode/
