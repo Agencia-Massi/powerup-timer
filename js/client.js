@@ -4,14 +4,21 @@ const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free
 const GITHUB_PAGES_BASE = 'https://miguelnsimoes.github.io/meu-trello-timer';
 
 function callBackend(endpoint, method, body = null) {
+    const headers = {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+    };
+
     return fetch(`${NODE_API_BASE_URL}/${endpoint}`, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: body ? JSON.stringify(body) : null
     })
     .then(response => {
         if (!response.ok) {
-            return response.json().then(error => { throw new Error(error.error || `Erro de rede/servidor: ${response.status}`); });
+            return response.json().then(error => { 
+                throw new Error(error.error || `Erro de rede/servidor: ${response.status}`); 
+            });
         }
         return response.json();
     });
