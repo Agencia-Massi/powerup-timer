@@ -42,10 +42,10 @@ TrelloPowerUp.initialize({
             t.member('fullName')
         ])
         .then(function([statusData, memberData]) {
-            if (!statusData) return [];
+            var timerButton = null;
 
-            if(statusData.isRunningHere){
-                return [{
+            if (statusData && statusData.isRunningHere) {
+                timerButton = {
                     icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                     text: 'Pausar Timer',
                     callback: function(t) {
@@ -59,10 +59,10 @@ TrelloPowerUp.initialize({
                             display: 'success' 
                         }));
                     } 
-                }];
+                };
             } else {
-                var btnText = statusData.isOtherTimerRunning ? 'Iniciar (Pausará Outro)' : 'Iniciar Timer';
-                return [{
+                var btnText = (statusData && statusData.isOtherTimerRunning) ? 'Iniciar (Pausará Outro)' : 'Iniciar Timer';
+                timerButton = {
                     icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                     text: btnText,
                     callback: function(t){
@@ -77,8 +77,24 @@ TrelloPowerUp.initialize({
                             display: 'info'
                         }));
                     }
-                }];
+                };
             }
+            //botao de gestao de tempo no proprio card
+            var settingsButton = {
+                icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
+                text: 'Configurar Limite',
+                callback: function(t) {
+                    return t.modal({
+                        title: 'Gestão deste Cartão',                  
+                        url: `${GITHUB_PAGES_BASE}/dashboard.html?cardId=${context.card}`,
+                        accentColor: '#0079BF', 
+                        height: 500, 
+                        fullscreen: false
+                    });
+                }
+            };
+
+            return [timerButton, settingsButton];
         })
         .catch(err => { 
             return []; 
@@ -149,21 +165,5 @@ TrelloPowerUp.initialize({
             return [];
         })
         .catch(() => []);
-    }, 
-
-'board-buttons': function(t, options) {
-        return [{ 
-            icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
-            text: 'Relatório de Tempo',
-            callback: function(t) {
-                return t.modal({
-                    title: 'Painel de Gestão',
-                    url: `${GITHUB_PAGES_BASE}/dashboard.html`,
-                    accentColor: '#0079BF', 
-                    height: 500, 
-                    fullscreen: false
-                });
-            }
-        }]; 
     }
 });
