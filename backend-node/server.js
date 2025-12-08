@@ -46,10 +46,14 @@ app.get('/timer/status/:memberId/:cardId', (req, res) => {
         }
     }
 
+    const cardLogs = timeLogs.filter(l => String(l.cardId) === String(cardId));
+    const totalPastSeconds = cardLogs.reduce((acc, log) => acc + (log.duration || 0), 0);
+
     res.json({
         isRunningHere,
         isOtherTimerRunning,
-        activeTimerData: activeTimer || null
+        activeTimerData: activeTimer || null,
+        totalPastSeconds: totalPastSeconds
     });
 });
 

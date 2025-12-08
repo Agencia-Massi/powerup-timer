@@ -7,6 +7,7 @@ function formatTime(totalSeconds) {
     var hours = Math.floor(totalSeconds / 3600);
     var minutes = Math.floor((totalSeconds % 3600) / 60);
     var seconds = Math.floor(totalSeconds % 60);
+    
     var h = hours > 0 ? hours + ':' : '';
     var m = (minutes < 10 ? '0' : '') + minutes;
     var s = (seconds < 10 ? '0' : '') + seconds;
@@ -25,7 +26,9 @@ function callBackend(endpoint, method, body = null) {
     })
     .then(response => {
         if (!response.ok) {
-            return response.json().then(error => { throw new Error(error.error || `Erro: ${response.status}`); });
+            return response.json().catch(() => ({})).then(err => {
+                throw new Error(err.error || `Erro HTTP: ${response.status}`);
+            });
         }
         return response.json();
     });
@@ -39,22 +42,28 @@ TrelloPowerUp.initialize({
             t.member('fullName')
         ])
         .then(function([statusData, memberData]) {
+            if (!statusData) return [];
+
             if(statusData.isRunningHere){
-                return[{
-                    icon:`${GITHUB_PAGES_BASE}/img/icon.svg`,
-                    text: 'Pausar',
+                return [{
+                    icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
+                    text: 'Pausar Timer',
                     callback: function(t) {
                         return callBackend('timer/stop', 'POST', {
                             memberId: context.member,
                             cardId: context.card
                         })
-                        .then(data => t.alert({ message: `Pausado! Duração: ${formatTime(data.newTotalSeconds)}`, duration: 5, display: 'success' }));
+                        .then(data => t.alert({ 
+                            message: `Pausado! Tempo total: ${formatTime(data.newTotalSeconds)}`, 
+                            duration: 5, 
+                            display: 'success' 
+                        }));
                     } 
                 }];
             } else {
-                var btnText = statusData.isOtherTimerRunning ? 'Iniciar (Pausará Outro)' : 'Iniciar';
-                return[{
-                    icon:`${GITHUB_PAGES_BASE}/img/icon.svg`,
+                var btnText = statusData.isOtherTimerRunning ? 'Iniciar (Pausará Outro)' : 'Iniciar Timer';
+                return [{
+                    icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                     text: btnText,
                     callback: function(t){
                         return callBackend('timer/start', 'POST', {
@@ -62,30 +71,47 @@ TrelloPowerUp.initialize({
                             cardId: context.card,
                             memberName: memberData.fullName
                         })
-                        .then(data => t.alert({ message: 'Timer iniciado!', duration: 3 }));
+                        .then(() => t.alert({ 
+                            message: 'Timer iniciado!', 
+                            duration: 2,
+                            display: 'info'
+                        }));
                     }
                 }];
             }
         })
-        .catch(err => { console.error(err); return []; });
+        .catch(err => { 
+            return []; 
+        });
     },
 
     'card-badges': function(t, options){
         var context = t.getContext();
         return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
         .then(function(statusData) {
-            if (statusData.activeTimerData && statusData.isRunningHere) {
+            if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {
                         var now = new Date();
                         var start = new Date(statusData.activeTimerData.startTime);
-                        var diff = Math.floor((now - start) / 1000);
+                        if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
+
+                        var currentSession = Math.floor((now - start) / 1000);
+                        var total = currentSession + (statusData.totalPastSeconds || 0);
+
                         return {
-                            text: '⏱️ ' + formatTime(diff),
+                            text: '⏱️ ' + formatTime(total),
                             color: 'green',
-                            refresh: 1 
+                            refresh: 10
                         };
                     }
+                }];
+            }
+            
+            if (statusData && statusData.totalPastSeconds > 0) {
+                return [{
+                    text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
+                    refresh: 10
                 }];
             }
 
@@ -98,18 +124,24 @@ TrelloPowerUp.initialize({
         var context = t.getContext();
         return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
         .then(function(statusData) {
-            if (statusData.activeTimerData && statusData.isRunningHere) {
+            if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {
                         var now = new Date();
                         var start = new Date(statusData.activeTimerData.startTime);
                         var diff = Math.floor((now - start) / 1000);
                         return {
-                            title: "Tempo Ativo",
+                            title: "Sessão Atual",
                             text: formatTime(diff),
                             color: "green",
                             refresh: 1,
-                            callback: function(t) { return t.alert({ message: "Vá em Power-Ups para pausar." }); }
+                            callback: function(t) {
+                                return callBackend('timer/stop', 'POST', {
+                                    memberId: context.member,
+                                    cardId: context.card
+                                })
+                                .then(data => t.alert({ message: "Timer Parado!" }));
+                            }
                         };
                     }
                 }];
