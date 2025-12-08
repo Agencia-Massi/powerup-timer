@@ -149,7 +149,7 @@ TrelloPowerUp.initialize({
             return [];
         })
         .catch(() => []);
-    },
+    }, 
 
     'board-buttons': function(t, options) {
         return [{
@@ -158,7 +158,7 @@ TrelloPowerUp.initialize({
             callback: function(t) {
                 return t.modal({
                     title: 'Painel de Gestão',
-                    url: './dashboard.html', 
+                    url: `${GITHUB_PAGES_BASE}/dashboard.html`,
                     accentColor: '#0079BF', 
                     height: 500, 
                     fullscreen: false
@@ -166,7 +166,4 @@ TrelloPowerUp.initialize({
             }
         }];
     }
-
-
-
 });
