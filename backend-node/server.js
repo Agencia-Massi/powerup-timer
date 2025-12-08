@@ -2,12 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const cron = require('node-cron');
-const fetch = require('node-fetch');
 
 const app = express();
 const PORT = 3000;
 
-const N8N_WEBHOOK_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev/webhook-test/bfc8317c-a794-4364-81e2-2ca172cfb558';
+const N8N_WEBHOOK_URL = 'http://localhost:5678/webhook-test/bfc8317c-a794-4364-81e2-2ca172cfb558';
 
 app.use(cors()); 
 app.use(bodyParser.json());
