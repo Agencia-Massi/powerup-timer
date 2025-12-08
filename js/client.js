@@ -151,8 +151,8 @@ TrelloPowerUp.initialize({
         .catch(() => []);
     }, 
 
-    'board-buttons': function(t, options) {
-        return [{
+'board-buttons': function(t, options) {
+        return [{ 
             icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
             text: 'Relatório de Tempo',
             callback: function(t) {
@@ -164,6 +164,6 @@ TrelloPowerUp.initialize({
                     fullscreen: false
                 });
             }
-        }];
+        }]; 
     }
 });
