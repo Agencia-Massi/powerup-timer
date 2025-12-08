@@ -149,5 +149,24 @@ TrelloPowerUp.initialize({
             return [];
         })
         .catch(() => []);
+    },
+
+    'board-buttons': function(t, options) {
+        return [{
+            icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
+            text: 'Relatório de Tempo',
+            callback: function(t) {
+                return t.modal({
+                    title: 'Painel de Gestão',
+                    url: './dashboard.html', 
+                    accentColor: '#0079BF', 
+                    height: 500, 
+                    fullscreen: false
+                });
+            }
+        }];
     }
+
+
+
 });
