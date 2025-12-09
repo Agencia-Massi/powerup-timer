@@ -53,11 +53,16 @@ TrelloPowerUp.initialize({
                             memberId: context.member,
                             cardId: context.card
                         })
-                        .then(data => t.alert({ 
-                            message: `Pausado! Tempo total: ${formatTime(data.newTotalSeconds)}`, 
-                            duration: 5, 
-                            display: 'success' 
-                        }));
+                        .then(data => {
+                            return t.set('card', 'shared', 'refresh', Math.random())
+                            .then(() => {
+                                t.alert({ 
+                                    message: `Pausado! Tempo: ${formatTime(data.newTotalSeconds)}`, 
+                                    duration: 3, 
+                                    display: 'success' 
+                                });
+                            });
+                        });
                     } 
                 };
             } else {
@@ -71,26 +76,31 @@ TrelloPowerUp.initialize({
                             cardId: context.card,
                             memberName: memberData.fullName
                         })
-                        .then(() => t.alert({ 
-                            message: 'Timer iniciado!', 
-                            duration: 2,
-                            display: 'info'
-                        }));
+                        .then(() => {
+                            return t.set('card', 'shared', 'refresh', Math.random())
+                            .then(() => {
+                                t.alert({ 
+                                    message: 'Timer iniciado!', 
+                                    duration: 2,
+                                    display: 'info'
+                                });
+                            });
+                        });
                     }
                 };
             }
-            //botao de gestao de tempo no proprio card
+
             var settingsButton = {
-                icon: `${GITHUB_PAGES_BASE}/img/settings.svg`,
+                icon: `${GITHUB_PAGES_BASE}/img/settings.svg`, 
                 text: 'Configurar Limite',
                 callback: function(t) {
-                return t.modal({
-                    title: 'Gestão deste Cartão',
-                    url: `${GITHUB_PAGES_BASE}/dashboard/dashboard.html?cardId=${context.card}`, 
-                    accentColor: '#0079BF', 
-                    height: 500, 
-                    fullscreen: false
-                 });
+                    return t.modal({
+                        title: 'Gestão deste Cartão',
+                        url: `${GITHUB_PAGES_BASE}/dashboard/dashboard.html?cardId=${context.card}`, 
+                        accentColor: '#0079BF', 
+                        height: 500, 
+                        fullscreen: false
+                    });
                 }
             };
 
@@ -118,7 +128,7 @@ TrelloPowerUp.initialize({
                         return {
                             text: '⏱️ ' + formatTime(total),
                             color: 'green',
-                            refresh: 10
+                            refresh: 1 
                         };
                     }
                 }];
@@ -127,7 +137,7 @@ TrelloPowerUp.initialize({
             if (statusData && statusData.totalPastSeconds > 0) {
                 return [{
                     text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
-                    refresh: 10
+                    refresh: 5 
                 }];
             }
 
@@ -156,7 +166,10 @@ TrelloPowerUp.initialize({
                                     memberId: context.member,
                                     cardId: context.card
                                 })
-                                .then(data => t.alert({ message: "Timer Parado!" }));
+                                .then(data => {
+                                     return t.set('card', 'shared', 'refresh', Math.random())
+                                     .then(() => t.alert({ message: "Timer Parado!" }));
+                                });
                             }
                         };
                     }
