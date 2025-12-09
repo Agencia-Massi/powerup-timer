@@ -54,7 +54,7 @@ TrelloPowerUp.initialize({
                             cardId: context.card
                         })
                         .then(data => {
-                            return t.set('card', 'shared', 'refresh', Math.random())
+                            return t.set('board', 'shared', 'refresh', Math.random())
                             .then(() => {
                                 t.alert({ 
                                     message: `Pausado! Tempo: ${formatTime(data.newTotalSeconds)}`, 
@@ -77,7 +77,7 @@ TrelloPowerUp.initialize({
                             memberName: memberData.fullName
                         })
                         .then(() => {
-                            return t.set('card', 'shared', 'refresh', Math.random())
+                            return t.set('board', 'shared', 'refresh', Math.random())
                             .then(() => {
                                 t.alert({ 
                                     message: 'Timer iniciado!', 
@@ -167,7 +167,7 @@ TrelloPowerUp.initialize({
                                     cardId: context.card
                                 })
                                 .then(data => {
-                                     return t.set('card', 'shared', 'refresh', Math.random())
+                                     return t.set('board', 'shared', 'refresh', Math.random())
                                      .then(() => t.alert({ message: "Timer Parado!" }));
                                 });
                             }
