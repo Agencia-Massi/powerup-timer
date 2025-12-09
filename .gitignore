@@ -1,5 +1,18 @@
-/backend-node/node_modules
 
-npm-debug.log
-.ngrok2
+backend-node/
+
+node_modules/
+
+venv/
+
+__pycache__/
+*.pyc
+*.log
+ngrok.log
+*.db
+
+
 .vscode/
+.DS_Store
+Thumbs.db
+*~

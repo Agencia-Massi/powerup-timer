@@ -81,16 +81,16 @@ TrelloPowerUp.initialize({
             }
             //botao de gestao de tempo no proprio card
             var settingsButton = {
-                icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
+                icon: `${GITHUB_PAGES_BASE}/img/settings.svg`,
                 text: 'Configurar Limite',
                 callback: function(t) {
-                    return t.modal({
-                        title: 'Gestão deste Cartão',                  
-                        url: `${GITHUB_PAGES_BASE}/dashboard.html?cardId=${context.card}`,
-                        accentColor: '#0079BF', 
-                        height: 500, 
-                        fullscreen: false
-                    });
+                return t.modal({
+                    title: 'Gestão deste Cartão',
+                    url: `${GITHUB_PAGES_BASE}/dashboard/dashboard.html?cardId=${context.card}`, 
+                    accentColor: '#0079BF', 
+                    height: 500, 
+                    fullscreen: false
+                 });
                 }
             };
 
