@@ -50,7 +50,7 @@ th {
     text-align: left;
     padding: 10px;
     background: #ebecf0;
-    color: #ebecf0;
+    color: #172b4d;
     font-size: 12px;
     text-transform: uppercase;
 }
@@ -82,7 +82,7 @@ tr:last-child td {
 .btn-edit {
     background: none;
     border: none;
-    color: #ebecf0;
+    color: #026aa7;
     cursor: pointer;
     text-decoration: underline;
     margin-right: 10px;
