@@ -12,10 +12,10 @@ function formatTime(totalSeconds) {
     var hours = Math.floor(totalSeconds / 3600);
     var minutes = Math.floor((totalSeconds % 3600) / 60);
     var seconds = Math.floor(totalSeconds % 60);
-    var h = hours > 0 ? hours + ':' : '';
-    var m = (minutes < 10 ? '0' : '') + minutes;
+    var h = (hours < 10 ? '0' : '') + hours + ':';
+    var m = (minutes < 10 ? '0' : '') + minutes + ':';
     var s = (seconds < 10 ? '0' : '') + seconds;
-    return h + m + ':' + s;
+    return h + m + s;
 }
 
 function formatIsoDateToTime(isoDateString) {
@@ -24,34 +24,31 @@ function formatIsoDateToTime(isoDateString) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function parseInputToSeconds(input) {
+function parseStrictTime(input) {
     if (!input) return null;
     
-    if (input.includes(':')) {
-        var parts = input.split(':').map(Number);
-        if (parts.length === 3) {
-            return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
-        } else if (parts.length === 2) {
-            return (parts[0] * 3600) + (parts[1] * 60); 
-        }
+    var regex = /^\d{2}:\d{2}:\d{2}$/;
+    
+    if (!regex.test(input)) {
+        return null; 
     }
     
-    var num = parseInt(input);
-    return isNaN(num) ? null : num * 60; 
+    var parts = input.split(':').map(Number);
+    return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
 }
 
 var cardId = getUrlParameter('cardId');
 
 function editLog(logId, currentDuration) {
     var currentFormatted = formatTime(currentDuration);
-    var newTimeStr = prompt(`Editar tempo (formato HH:MM ou apenas minutos):`, currentFormatted);
+    var newTimeStr = prompt(`Editar tempo (Obrigatório formato HH:MM:SS):`, currentFormatted);
     
     if (newTimeStr === null) return; 
 
-    var newSeconds = parseInputToSeconds(newTimeStr);
+    var newSeconds = parseStrictTime(newTimeStr);
     
     if (newSeconds === null) {
-        alert("Formato inválido! Use HH:MM (ex: 01:30) ou minutos (ex: 90).");
+        alert("Formato inválido! Você DEVE usar o formato HH:MM:SS (Exemplo: 01:30:00).");
         return;
     }
 
@@ -80,6 +77,32 @@ function editLog(logId, currentDuration) {
     });
 }
 
+function deleteLog(logId) {
+    if (!confirm("Tem certeza que deseja excluir este registro?")) return;
+
+    fetch(`${NODE_API_BASE_URL}/timer/logs/${logId}`, {
+        method: 'DELETE',
+        headers: {
+            'ngrok-skip-browser-warning': 'true'
+        }
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Erro na API');
+        return response.json();
+    })
+    .then(() => {
+        loadDashboardData();
+        return t.set('board', 'shared', 'refresh', Math.random());
+    })
+    .then(() => {
+        t.alert({ message: 'Registro excluído!', duration: 3, display: 'info' });
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Erro ao excluir.");
+    });
+}
+
 function loadDashboardData() {
     fetch(`${NODE_API_BASE_URL}/timer/logs/${cardId}`, {
         method: 'GET',
@@ -104,20 +127,31 @@ function loadDashboardData() {
         data.logs.forEach(log => {
             var row = document.createElement('tr');
             
-            var btnHtml = `<button class="btn-edit" id="btn-edit-${log.id}">Editar</button>`;
-            if (!log.id) btnHtml = `<span style="color:#ccc; font-size:10px;">(Sem ID)</span>`;
+            var actionsHtml = '';
+            
+            if (log.id) {
+                actionsHtml = `
+                    <button class="btn-edit" id="btn-edit-${log.id}">Editar</button>
+                    <button class="btn-delete" id="btn-delete-${log.id}">Excluir</button>
+                `;
+            } else {
+                actionsHtml = `<span style="color:#ccc; font-size:10px;">(Sem ID)</span>`;
+            }
 
             row.innerHTML = `
                 <td>${log.memberName || 'Usuário'}</td>
                 <td>${formatIsoDateToTime(log.date)}</td>
                 <td>${formatTime(log.duration)}</td>
-                <td>${btnHtml}</td>
+                <td>${actionsHtml}</td>
             `;
             tableBody.appendChild(row);
 
             if (log.id) {
                 document.getElementById(`btn-edit-${log.id}`).addEventListener('click', function() {
                     editLog(log.id, log.duration);
+                });
+                document.getElementById(`btn-delete-${log.id}`).addEventListener('click', function() {
+                    deleteLog(log.id);
                 });
             }
         });

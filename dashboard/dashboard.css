@@ -18,7 +18,6 @@ h2 {
     color: #172b4d;
 }
 
-
 .settings-box {
     background-color: #eaf6ff;
     padding: 15px;
@@ -41,7 +40,6 @@ h2 {
     border: 1px solid #ccc;
 }
 
-
 table {
     width: 100%;
     border-collapse: collapse;
@@ -60,7 +58,7 @@ th {
 td {
     padding: 10px;
     border-bottom: 1px solid #ebecf0;
-    color: #ebecf0;
+    color: #172b4d;
 }
 
 tr:last-child td {
@@ -84,11 +82,24 @@ tr:last-child td {
 .btn-edit {
     background: none;
     border: none;
-    color: #5e6c84;
+    color: #ebecf0;
+    cursor: pointer;
+    text-decoration: underline;
+    margin-right: 10px;
+}
+
+.btn-edit:hover {
+    color: #026aa7;
+}
+
+.btn-delete {
+    background: none;
+    border: none;
+    color: #eb5a46; 
     cursor: pointer;
     text-decoration: underline;
 }
 
-.btn-edit:hover {
-    color: #ebecf0;
+.btn-delete:hover {
+    color: #cf513d;
 }
