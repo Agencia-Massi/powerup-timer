@@ -69,6 +69,9 @@ function editLog(logId, currentDuration) {
     })
     .then(() => {
         loadDashboardData(); 
+        return t.set('board', 'shared', 'refresh', Math.random());
+    })
+    .then(() => {
         t.alert({ message: 'Tempo atualizado!', duration: 3, display: 'success' });
     })
     .catch(err => {
