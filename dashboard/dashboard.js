@@ -1,5 +1,4 @@
 var t = TrelloPowerUp.iframe();
-
 const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev';
 
 function getUrlParameter(name) {
@@ -25,7 +24,58 @@ function formatIsoDateToTime(isoDateString) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function parseInputToSeconds(input) {
+    if (!input) return null;
+    
+    if (input.includes(':')) {
+        var parts = input.split(':').map(Number);
+        if (parts.length === 3) {
+            return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+        } else if (parts.length === 2) {
+            return (parts[0] * 3600) + (parts[1] * 60); 
+        }
+    }
+    
+    var num = parseInt(input);
+    return isNaN(num) ? null : num * 60; 
+}
+
 var cardId = getUrlParameter('cardId');
+
+function editLog(logId, currentDuration) {
+    var currentFormatted = formatTime(currentDuration);
+    var newTimeStr = prompt(`Editar tempo (formato HH:MM ou apenas minutos):`, currentFormatted);
+    
+    if (newTimeStr === null) return; 
+
+    var newSeconds = parseInputToSeconds(newTimeStr);
+    
+    if (newSeconds === null) {
+        alert("Formato inválido! Use HH:MM (ex: 01:30) ou minutos (ex: 90).");
+        return;
+    }
+
+    fetch(`${NODE_API_BASE_URL}/timer/logs/${logId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ duration: newSeconds })
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Erro na API');
+        return response.json();
+    })
+    .then(() => {
+        loadDashboardData(); 
+        t.alert({ message: 'Tempo atualizado!', duration: 3, display: 'success' });
+    })
+    .catch(err => {
+        console.error(err);
+        alert("Erro ao salvar edição.");
+    });
+}
 
 function loadDashboardData() {
     fetch(`${NODE_API_BASE_URL}/timer/logs/${cardId}`, {
@@ -50,13 +100,23 @@ function loadDashboardData() {
 
         data.logs.forEach(log => {
             var row = document.createElement('tr');
+            
+            var btnHtml = `<button class="btn-edit" id="btn-edit-${log.id}">Editar</button>`;
+            if (!log.id) btnHtml = `<span style="color:#ccc; font-size:10px;">(Sem ID)</span>`;
+
             row.innerHTML = `
                 <td>${log.memberName || 'Usuário'}</td>
                 <td>${formatIsoDateToTime(log.date)}</td>
                 <td>${formatTime(log.duration)}</td>
-                <td><button class="btn-edit" disabled>Editar</button></td>
+                <td>${btnHtml}</td>
             `;
             tableBody.appendChild(row);
+
+            if (log.id) {
+                document.getElementById(`btn-edit-${log.id}`).addEventListener('click', function() {
+                    editLog(log.id, log.duration);
+                });
+            }
         });
     })
     .catch(err => console.error(err));
