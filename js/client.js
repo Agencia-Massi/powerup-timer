@@ -173,16 +173,19 @@ TrelloPowerUp.initialize({
                         .then(newStatus => {
                             if (!newStatus.isRunningHere) {
                                 t.set('board', 'shared', 'refresh', Math.random());
-                                return { title: "Sessão Atual", text: 'Parando...', color: 'red', refresh: 1 };
+                                return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 1 };
                             }
 
                             var now = new Date();
                             var start = new Date(newStatus.activeTimerData.startTime);
-                            var diff = Math.floor((now - start) / 1000);
+                            
+                            var currentSession = Math.floor((now - start) / 1000);
+                            
+                            var total = currentSession + (newStatus.totalPastSeconds || 0);
                             
                             return {
-                                title: "Sessão Atual",
-                                text: formatTime(diff),
+                                title: "Tempo Total", 
+                                text: formatTime(total), 
                                 color: "green",
                                 refresh: 1,
                                 callback: function(t) {
