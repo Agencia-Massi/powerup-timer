@@ -115,6 +115,11 @@ TrelloPowerUp.initialize({
         var context = t.getContext();
         return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
         .then(function(statusData) {
+            
+            if (statusData && statusData.forceRefresh) {
+                 t.set('board', 'shared', 'refresh', Math.random());
+            }
+
             if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {

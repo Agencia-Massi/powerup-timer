@@ -7,7 +7,6 @@ import requests
 import asyncio
 
 async def check_timers_periodically():
-    print("Vigia iniciado: Monitorando limites de tempo...")
     while True:
         try:
             now_str = datetime.now().strftime("%H:%M")
@@ -36,11 +35,12 @@ async def check_timers_periodically():
                         time_logs.append(new_log)
                         send_log_to_n8n(new_log)
                         
-                    
                         if timer in active_timers:
                             active_timers.remove(timer)
 
-            
+                        global last_auto_stopped_card
+                        last_auto_stopped_card = card_id
+
             await asyncio.sleep(60)
             
         except Exception as e:
@@ -69,6 +69,7 @@ app.add_middleware(
 active_timers = [] 
 time_logs = []
 card_settings = {} 
+last_auto_stopped_card = None
 
 
 class StartTimerSchema(BaseModel):
@@ -118,11 +119,18 @@ def get_timer_status(member_id: str, card_id: str):
     card_logs = [log for log in time_logs if str(log["cardId"]) == str(card_id)]
     total_past_seconds = sum(log["duration"] for log in card_logs)
 
+    global last_auto_stopped_card
+    should_refresh = False
+    if last_auto_stopped_card == card_id:
+        should_refresh = True
+        last_auto_stopped_card = None 
+
     return {
         "isRunningHere": is_running_here,
         "isOtherTimerRunning": is_other_timer_running,
         "activeTimerData": active_timer,
-        "totalPastSeconds": total_past_seconds
+        "totalPastSeconds": total_past_seconds,
+        "forceRefresh": should_refresh
     }
 
 
