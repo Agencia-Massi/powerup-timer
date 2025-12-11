@@ -118,28 +118,34 @@ TrelloPowerUp.initialize({
             
             if (statusData && statusData.forceRefresh) {
                  t.set('board', 'shared', 'refresh', Math.random());
-
                  fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${context.card}`, {
-                    method: 'POST',
-                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                    method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
                  }).catch(err => {});
             }
 
             if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {
-                        var now = new Date();
-                        var start = new Date(statusData.activeTimerData.startTime);
-                        if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
+                        return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
+                        .then(newStatus => {
+                            if (!newStatus.isRunningHere) {
+                                t.set('board', 'shared', 'refresh', Math.random());
+                                return { text: 'Parando...', color: 'red', refresh: 1 };
+                            }
 
-                        var currentSession = Math.floor((now - start) / 1000);
-                        var total = currentSession + (statusData.totalPastSeconds || 0);
+                            var now = new Date();
+                            var start = new Date(newStatus.activeTimerData.startTime);
+                            if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
 
-                        return {
-                            text: '⏱️ ' + formatTime(total),
-                            color: 'green',
-                            refresh: 1 
-                        };
+                            var currentSession = Math.floor((now - start) / 1000);
+                            var total = currentSession + (newStatus.totalPastSeconds || 0);
+
+                            return {
+                                text: '⏱️ ' + formatTime(total),
+                                color: 'green',
+                                refresh: 1 
+                            };
+                        });
                     }
                 }];
             }
@@ -163,25 +169,34 @@ TrelloPowerUp.initialize({
             if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {
-                        var now = new Date();
-                        var start = new Date(statusData.activeTimerData.startTime);
-                        var diff = Math.floor((now - start) / 1000);
-                        return {
-                            title: "Sessão Atual",
-                            text: formatTime(diff),
-                            color: "green",
-                            refresh: 1,
-                            callback: function(t) {
-                                return callBackend('timer/stop', 'POST', {
-                                    memberId: context.member,
-                                    cardId: context.card
-                                })
-                                .then(data => {
-                                     return t.set('board', 'shared', 'refresh', Math.random())
-                                     .then(() => t.alert({ message: "Timer Parado!" }));
-                                });
+                        return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
+                        .then(newStatus => {
+                            if (!newStatus.isRunningHere) {
+                                t.set('board', 'shared', 'refresh', Math.random());
+                                return { title: "Sessão Atual", text: 'Parando...', color: 'red', refresh: 1 };
                             }
-                        };
+
+                            var now = new Date();
+                            var start = new Date(newStatus.activeTimerData.startTime);
+                            var diff = Math.floor((now - start) / 1000);
+                            
+                            return {
+                                title: "Sessão Atual",
+                                text: formatTime(diff),
+                                color: "green",
+                                refresh: 1,
+                                callback: function(t) {
+                                    return callBackend('timer/stop', 'POST', {
+                                        memberId: context.member,
+                                        cardId: context.card
+                                    })
+                                    .then(data => {
+                                         return t.set('board', 'shared', 'refresh', Math.random())
+                                         .then(() => t.alert({ message: "Timer Parado!" }));
+                                    });
+                                }
+                            };
+                        });
                     }
                 }];
             }
