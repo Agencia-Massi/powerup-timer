@@ -5,6 +5,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import requests
 import asyncio
+import uuid 
 
 active_timers = [] 
 time_logs = []
@@ -23,6 +24,9 @@ class StopTimerSchema(BaseModel):
 class SettingsSchema(BaseModel):
     cardId: str
     timeLimit: str 
+
+class UpdateLogSchema(BaseModel):
+    duration: int 
 
 def calculate_duration(start_time_iso):
     start = datetime.fromisoformat(start_time_iso.replace('Z', '+00:00'))
@@ -51,6 +55,7 @@ async def check_timers_periodically():
                         duration = calculate_duration(timer["startTime"])
                         
                         new_log = {
+                            "id": str(uuid.uuid4()), 
                             "cardId": card_id,
                             "duration": duration,
                             "date": datetime.now().isoformat(),
@@ -90,6 +95,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/timer/clear_refresh_flag/{card_id}")
 def clear_refresh_flag(card_id: str):
     global last_auto_stopped_card
@@ -97,6 +103,19 @@ def clear_refresh_flag(card_id: str):
         last_auto_stopped_card = None
         return {"message": "Refresh flag cleared."}
     return {"message": "No action needed."}
+
+
+@app.put("/timer/logs/{log_id}")
+def update_log(log_id: str, body: UpdateLogSchema):
+    for log in time_logs:
+        if log.get("id") == log_id:
+            old_duration = log["duration"]
+            log["duration"] = body.duration 
+            print(f"Log {log_id} atualizado: {old_duration} -> {body.duration}")
+            return {"message": "Log atualizado com sucesso!", "log": log}
+    
+    raise HTTPException(status_code=404, detail="Log não encontrado")
+
 
 @app.get("/timer/status/{member_id}/{card_id}")
 def get_timer_status(member_id: str, card_id: str):
@@ -139,6 +158,7 @@ def start_timer(body: StartTimerSchema):
         duration_prev = calculate_duration(previous_timer["startTime"])
         
         previous_log = {
+            "id": str(uuid.uuid4()), 
             "cardId": previous_timer["cardId"],
             "duration": duration_prev,
             "date": now.isoformat(),
@@ -173,6 +193,7 @@ def stop_timer(body: StopTimerSchema):
     duration_seconds = calculate_duration(stopped_timer["startTime"])
     
     new_log = {
+        "id": str(uuid.uuid4()),
         "cardId": body.cardId,
         "duration": duration_seconds,
         "date": datetime.now().isoformat(),
