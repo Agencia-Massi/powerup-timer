@@ -8,7 +8,7 @@ body {
 .container {
     max-width: 600px;
     margin: 0 auto;
-    background: #ffffff !important; 
+    background: #ffffff !important;
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
@@ -16,11 +16,11 @@ body {
 
 h2, h3 {
     margin-top: 0;
-    color: #172b4d !important; 
+    color: #172b4d !important;
 }
 
 .settings-box {
-    background-color: #eaf6ff !important; 
+    background-color: #eaf6ff !important;
     padding: 15px;
     border-radius: 4px;
     margin-bottom: 20px;
@@ -32,17 +32,16 @@ h2, h3 {
 
 .settings-box label {
     font-weight: bold;
-    color: #0747a6 !important; 
+    color: #0747a6 !important;
 }
 
 .settings-box input[type="time"] {
     padding: 5px;
     border-radius: 4px;
     border: 1px solid #dfe1e6;
-    background-color: #ffffff !important; 
+    background-color: #ffffff !important;
     color: #172b4d !important;
 }
-
 
 table {
     width: 100%;
@@ -53,23 +52,26 @@ table {
 th {
     text-align: left;
     padding: 10px;
-    background-color: #0079bf !important; 
-    color: #ffffff !important; 
+    background-color: #0079bf !important;
+    color: #ffffff !important;
     font-size: 12px;
     text-transform: uppercase;
 }
 
-td {
+#logsTableBody tr {
+    background-color: #ffffff !important;
+}
+
+#logsTableBody td {
     padding: 10px;
     border-bottom: 1px solid #dfe1e6;
-    color: black I !important;
-    background-color: #ffffff !important; 
+    color: #172b4d !important;
+    background-color: #ffffff !important;
 }
 
 tr:last-child td {
     border-bottom: none;
 }
-
 
 .btn-save {
     background-color: #0079bf !important;
