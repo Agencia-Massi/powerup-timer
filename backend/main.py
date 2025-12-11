@@ -2,9 +2,39 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime
-from contextlib import asynccontextmanager 
+from contextlib import asynccontextmanager
 import requests
 import asyncio
+
+active_timers = [] 
+time_logs = []
+card_settings = {} 
+last_auto_stopped_card = None
+
+class StartTimerSchema(BaseModel):
+    memberId: str
+    cardId: str
+    memberName: str
+
+class StopTimerSchema(BaseModel):
+    memberId: str
+    cardId: str
+
+class SettingsSchema(BaseModel):
+    cardId: str
+    timeLimit: str 
+
+def calculate_duration(start_time_iso):
+    start = datetime.fromisoformat(start_time_iso.replace('Z', '+00:00'))
+    end = datetime.now()
+    diff = (end - start.replace(tzinfo=None)).total_seconds()
+    return int(diff) if diff > 0 else 0
+
+def send_log_to_n8n(log_data):
+    try:
+        requests.post(N8N_WEBHOOK_URL, json=log_data)
+    except Exception:
+        pass
 
 async def check_timers_periodically():
     while True:
@@ -14,13 +44,10 @@ async def check_timers_periodically():
 
             for timer in current_timers:
                 card_id = timer["cardId"]
-                
                 limit = card_settings.get(card_id)
                 
                 if limit:
                     if now_str >= limit:
-                        print(f" LIMITE ATINGIDO! Parando timer do card {card_id}")
-                        
                         duration = calculate_duration(timer["startTime"])
                         
                         new_log = {
@@ -43,10 +70,8 @@ async def check_timers_periodically():
 
             await asyncio.sleep(60)
             
-        except Exception as e:
-            print(f"Erro no Vigia: {e}")
+        except Exception:
             await asyncio.sleep(60)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,7 +80,6 @@ async def lifespan(app: FastAPI):
     task.cancel()
 
 app = FastAPI(lifespan=lifespan)
-
 N8N_WEBHOOK_URL = 'http://localhost:5678/webhook-test/bfc8317c-a794-4364-81e2-2ca172cfb558'
 
 app.add_middleware(
@@ -66,42 +90,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-active_timers = [] 
-time_logs = []
-card_settings = {} 
-last_auto_stopped_card = None
-
-
-class StartTimerSchema(BaseModel):
-    memberId: str
-    cardId: str
-    memberName: str
-
-class StopTimerSchema(BaseModel):
-    memberId: str
-    cardId: str
-
-class SettingsSchema(BaseModel):
-    cardId: str
-    timeLimit: str 
-
-
-
-def calculate_duration(start_time_iso):
-    start = datetime.fromisoformat(start_time_iso.replace('Z', '+00:00'))
-    end = datetime.now()
-    diff = (end - start.replace(tzinfo=None)).total_seconds()
-    return int(diff) if diff > 0 else 0
-
-
-
-def send_log_to_n8n(log_data):
-    print(f"Enviando log para n8n: {log_data}")
-    try:
-        requests.post(N8N_WEBHOOK_URL, json=log_data)
-    except Exception as e:
-        print(f"Erro ao enviar para n8n: {e}")
-
+@app.post("/timer/clear_refresh_flag/{card_id}")
+def clear_refresh_flag(card_id: str):
+    global last_auto_stopped_card
+    if last_auto_stopped_card == card_id:
+        last_auto_stopped_card = None
+        return {"message": "Refresh flag cleared."}
+    return {"message": "No action needed."}
 
 @app.get("/timer/status/{member_id}/{card_id}")
 def get_timer_status(member_id: str, card_id: str):
@@ -123,7 +118,6 @@ def get_timer_status(member_id: str, card_id: str):
     should_refresh = False
     if last_auto_stopped_card == card_id:
         should_refresh = True
-        last_auto_stopped_card = None 
 
     return {
         "isRunningHere": is_running_here,
@@ -132,7 +126,6 @@ def get_timer_status(member_id: str, card_id: str):
         "totalPastSeconds": total_past_seconds,
         "forceRefresh": should_refresh
     }
-
 
 @app.post("/timer/start")
 def start_timer(body: StartTimerSchema):
@@ -168,7 +161,6 @@ def start_timer(body: StartTimerSchema):
     active_timers.append(new_timer)
     return {"message": "Timer iniciado!", "stoppedPrevious": stopped_previous}
 
-
 @app.post("/timer/stop")
 def stop_timer(body: StopTimerSchema):
     index = next((i for i, t in enumerate(active_timers) 
@@ -194,15 +186,10 @@ def stop_timer(body: StopTimerSchema):
     
     return {"message": "Timer parado!", "newTotalSeconds": duration_seconds}
 
-
-
 @app.post("/timer/settings")
 def save_settings(settings: SettingsSchema):
     card_settings[settings.cardId] = settings.timeLimit
-    print(f"Configuração salva para o card {settings.cardId}: {settings.timeLimit}")
     return {"message": "Configuração salva com sucesso!"}
-
-
 
 @app.get("/timer/logs/{card_id}")
 def get_card_logs(card_id: str):

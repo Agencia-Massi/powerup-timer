@@ -118,6 +118,11 @@ TrelloPowerUp.initialize({
             
             if (statusData && statusData.forceRefresh) {
                  t.set('board', 'shared', 'refresh', Math.random());
+
+                 fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${context.card}`, {
+                    method: 'POST',
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                 }).catch(err => {});
             }
 
             if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
