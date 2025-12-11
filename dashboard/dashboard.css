@@ -62,8 +62,8 @@ th {
 td {
     padding: 10px;
     border-bottom: 1px solid #dfe1e6;
-    color: black;
-    background-color: #ffffff !important; 
+    color: black !important;
+    background-color: black !important; 
 }
 
 tr:last-child td {
