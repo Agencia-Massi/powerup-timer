@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+requests
+pydantic
+uuid
+supabase
+python-dotenv 

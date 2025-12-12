@@ -99,7 +99,6 @@ function deleteLog(logId) {
 }
 
 function loadDashboardData() {
-    // Adicionamos o timestamp _t para evitar cache do navegador nos logs
     fetch(`${NODE_API_BASE_URL}/timer/logs/${cardId}?_t=${Date.now()}`, {
         method: 'GET',
         headers: { 
