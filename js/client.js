@@ -41,6 +41,13 @@ function callBackend(endpoint, method, body = null) {
     });
 }
 
+function forceGlobalRefresh(t) {
+    return Promise.all([
+        t.set('board', 'shared', 'refresh', Math.random()),
+        t.set('card', 'shared', 'refresh', Math.random())
+    ]);
+}
+
 TrelloPowerUp.initialize({
     'card-buttons': function(t, options){
         var context = t.getContext();
@@ -61,7 +68,7 @@ TrelloPowerUp.initialize({
                             cardId: context.card
                         })
                         .then(data => {
-                            return t.set('board', 'shared', 'refresh', Math.random())
+                            return forceGlobalRefresh(t)
                             .then(() => {
                                 t.alert({ 
                                     message: `Pausado! Tempo: ${formatTime(data.newTotalSeconds)}`, 
@@ -84,7 +91,7 @@ TrelloPowerUp.initialize({
                             memberName: memberData.fullName
                         })
                         .then(() => {
-                            return t.set('board', 'shared', 'refresh', Math.random())
+                            return forceGlobalRefresh(t)
                             .then(() => {
                                 t.alert({ 
                                     message: 'Timer iniciado!', 
@@ -124,19 +131,19 @@ TrelloPowerUp.initialize({
         .then(function(statusData) {
             
             if (statusData && statusData.forceRefresh) {
-                 t.set('board', 'shared', 'refresh', Math.random());
+                 forceGlobalRefresh(t);
                  fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${context.card}`, {
                     method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
                  }).catch(err => {});
             }
 
-            if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
+            if (statusData && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {
                         return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
                         .then(newStatus => {
-                            if (!newStatus.isRunningHere) {
-                                t.set('board', 'shared', 'refresh', Math.random());
+                            if (!newStatus.activeTimerData) {
+                                forceGlobalRefresh(t);
                                 return { text: 'Parando...', color: 'red', refresh: 1 };
                             }
 
@@ -147,10 +154,13 @@ TrelloPowerUp.initialize({
                             var currentSession = Math.floor((now - start) / 1000);
                             var total = currentSession + (newStatus.totalPastSeconds || 0);
 
+                            var label = '⏱️ ';
+                             if (!newStatus.isRunningHere) label = '👤 ' + newStatus.activeTimerData.memberName + ': ';
+
                             return {
-                                text: '⏱️ ' + formatTime(total),
+                                text: label + formatTime(total),
                                 color: 'green',
-                                refresh: 1 
+                                refresh: 2
                             };
                         });
                     }
@@ -160,7 +170,7 @@ TrelloPowerUp.initialize({
             if (statusData && statusData.totalPastSeconds > 0) {
                 return [{
                     text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
-                    refresh: 2 
+                    refresh: 5 
                 }];
             }
 
@@ -173,13 +183,14 @@ TrelloPowerUp.initialize({
         var context = t.getContext();
         return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
         .then(function(statusData) {
-            if (statusData && statusData.isRunningHere && statusData.activeTimerData) {
+            
+            if (statusData && statusData.activeTimerData) {
                 return [{
                     dynamic: function() {
                         return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
                         .then(newStatus => {
-                            if (!newStatus.isRunningHere) {
-                                t.set('board', 'shared', 'refresh', Math.random());
+                            if (!newStatus.activeTimerData) {
+                                forceGlobalRefresh(t);
                                 return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 1 };
                             }
 
@@ -187,22 +198,29 @@ TrelloPowerUp.initialize({
                             var start = new Date(newStatus.activeTimerData.startTime);
                             var currentSession = Math.floor((now - start) / 1000);
                             var total = currentSession + (newStatus.totalPastSeconds || 0);
-                            
+                        
+                            var stopCallback = function(t) {
+                                return callBackend('timer/stop', 'POST', {
+                                    memberId: context.member, 
+
+                                    cardId: context.card
+                                })
+                                .then(data => {
+                                     return forceGlobalRefresh(t)
+                                     .then(() => t.alert({ message: "Timer Parado!" }));
+                                });
+                            };
+
+                            if (!newStatus.isRunningHere) {
+                                stopCallback = null;
+                            }
+
                             return {
-                                title: "Tempo Total",
+                                title: "Tempo Total" + (newStatus.isRunningHere ? "" : ` (${newStatus.activeTimerData.memberName})`),
                                 text: formatTime(total),
                                 color: "green",
                                 refresh: 1,
-                                callback: function(t) {
-                                    return callBackend('timer/stop', 'POST', {
-                                        memberId: context.member,
-                                        cardId: context.card
-                                    })
-                                    .then(data => {
-                                         return t.set('board', 'shared', 'refresh', Math.random())
-                                         .then(() => t.alert({ message: "Timer Parado!" }));
-                                    });
-                                }
+                                callback: stopCallback
                             };
                         });
                     }

@@ -127,14 +127,15 @@ def delete_log(log_id: str):
 
 @app.get("/timer/status/{member_id}/{card_id}")
 def get_timer_status(member_id: str, card_id: str):
-    active_timer = next((t for t in active_timers if str(t["memberId"]) == str(member_id)), None)
+    card_timer = next((t for t in active_timers if str(t["cardId"]) == str(card_id)), None)
+    user_timer = next((t for t in active_timers if str(t["memberId"]) == str(member_id)), None)
     
     is_running_here = False
     is_other_timer_running = False
 
-    if active_timer:
-        if str(active_timer["cardId"]) == str(card_id):
-            is_running_here = True
+    if user_timer:
+        if str(user_timer["cardId"]) == str(card_id):
+            is_running_here = True 
         else:
             is_other_timer_running = True
 
@@ -147,13 +148,12 @@ def get_timer_status(member_id: str, card_id: str):
         should_refresh = True
 
     return {
-        "isRunningHere": is_running_here,
+        "isRunningHere": is_running_here,         
         "isOtherTimerRunning": is_other_timer_running,
-        "activeTimerData": active_timer,
+        "activeTimerData": card_timer,          
         "totalPastSeconds": total_past_seconds,
         "forceRefresh": should_refresh
     }
-
 @app.post("/timer/start")
 def start_timer(body: StartTimerSchema):
     now = datetime.now()
@@ -189,6 +189,7 @@ def start_timer(body: StartTimerSchema):
     active_timers.append(new_timer)
     return {"message": "Timer iniciado!", "stoppedPrevious": stopped_previous}
 
+
 @app.post("/timer/stop")
 def stop_timer(body: StopTimerSchema):
     index = next((i for i, t in enumerate(active_timers) 
@@ -214,6 +215,7 @@ def stop_timer(body: StopTimerSchema):
     send_log_to_n8n(new_log)
     
     return {"message": "Timer parado!", "newTotalSeconds": duration_seconds}
+
 
 @app.post("/timer/settings")
 def save_settings(settings: SettingsSchema):
