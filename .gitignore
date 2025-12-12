@@ -1,20 +1,16 @@
-
 .env
+.env.local
 
-backend-node/
-
-node_modules/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 
 venv/
-
-__pycache__/
-*.pyc
-*.log
-ngrok.log
-*.db
-
+env/
+.venv/
 
 .vscode/
+.idea/
 .DS_Store
 Thumbs.db
-*~
