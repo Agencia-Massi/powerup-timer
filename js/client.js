@@ -3,12 +3,17 @@ var Promise = TrelloPowerUp.Promise;
 const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev';
 const GITHUB_PAGES_BASE = 'https://miguelnsimoes.github.io/meu-trello-timer';
 
-// --- CURA DO ID (Mantida) ---
 function getSafeId(incomingId) {
     if (typeof incomingId === 'object' && incomingId !== null) {
-        return incomingId.id || incomingId; 
+        return incomingId.id || JSON.stringify(incomingId); 
     }
     return incomingId;
+}
+
+function getSafeName(memberObj) {
+    if (!memberObj) return 'Usuário Trello';
+    if (typeof memberObj === 'string') return memberObj;
+    return memberObj.fullName || memberObj.username || 'Usuário Trello';
 }
 
 function formatTime(totalSeconds) {
@@ -60,17 +65,16 @@ TrelloPowerUp.initialize({
     'card-buttons': function(t, options){
         return Promise.all([
             t.card('id'), 
-            t.member('all'), // MUDANÇA: Pega o objeto completo para evitar erros
+            t.member('all'),
             t.getContext()
         ])
         .then(function([rawCardId, memberObj, context]) {
             
             var cardId = getSafeId(rawCardId);
-            
-            // MUDANÇA: Garante que pegamos o texto do nome
-            var safeMemberName = memberObj ? (memberObj.fullName || memberObj.username || 'Usuário') : 'Desconhecido';
+            var memberId = getSafeId(context.member);
+            var memberName = getSafeName(memberObj);
 
-            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+            return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
             .then(function(statusData) {
                 var timerButton = null;
 
@@ -80,7 +84,7 @@ TrelloPowerUp.initialize({
                         text: 'Pausar Timer',
                         callback: function(t) {
                             return callBackend('timer/stop', 'POST', {
-                                memberId: context.member,
+                                memberId: memberId,
                                 cardId: cardId 
                             })
                             .then(data => {
@@ -102,9 +106,9 @@ TrelloPowerUp.initialize({
                         text: btnText,
                         callback: function(t){
                             return callBackend('timer/start', 'POST', {
-                                memberId: context.member,
+                                memberId: memberId,
                                 cardId: cardId, 
-                                memberName: safeMemberName // Manda o nome limpo
+                                memberName: memberName
                             })
                             .then(() => {
                                 return forceGlobalRefresh(t)
@@ -142,14 +146,15 @@ TrelloPowerUp.initialize({
         });
     },
 
-    // --- BADGES DE CAPA ---
     'card-badges': function(t, options){
         return t.card('id')
         .then(function(rawCardId) {
+            
             var cardId = getSafeId(rawCardId);
             var context = t.getContext();
+            var memberId = getSafeId(context.member);
 
-            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+            return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
             .then(function(statusData) {
                 
                 if (statusData && statusData.forceRefresh) {
@@ -162,7 +167,7 @@ TrelloPowerUp.initialize({
                 if (statusData && statusData.activeTimerData) {
                     return [{
                         dynamic: function() {
-                            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+                            return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
                             .then(newStatus => {
                                 if (!newStatus.activeTimerData) {
                                     forceGlobalRefresh(t);
@@ -202,20 +207,21 @@ TrelloPowerUp.initialize({
         .catch(() => []);
     },
 
-    // --- BADGES DETALHADOS ---
     'card-detail-badges': function(t, options) {
         return t.card('id')
         .then(function(rawCardId) {
+            
             var cardId = getSafeId(rawCardId);
             var context = t.getContext();
+            var memberId = getSafeId(context.member);
 
-            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+            return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
             .then(function(statusData) {
                 
                 if (statusData && statusData.activeTimerData) {
                     return [{
                         dynamic: function() {
-                            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+                            return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
                             .then(newStatus => {
                                 if (!newStatus.activeTimerData) {
                                     forceGlobalRefresh(t);
@@ -229,7 +235,7 @@ TrelloPowerUp.initialize({
                             
                                 var stopCallback = function(t) {
                                     return callBackend('timer/stop', 'POST', {
-                                        memberId: context.member, 
+                                        memberId: memberId, 
                                         cardId: cardId 
                                     })
                                     .then(data => {
