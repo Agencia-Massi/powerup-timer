@@ -19,7 +19,14 @@ function callBackend(endpoint, method, body = null) {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true'
     };
-    return fetch(`${NODE_API_BASE_URL}/${endpoint}`, {
+
+    let url = `${NODE_API_BASE_URL}/${endpoint}`;
+    if (method === 'GET') {
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}_t=${Date.now()}`; 
+    }
+
+    return fetch(url, {
         method: method,
         headers: headers,
         body: body ? JSON.stringify(body) : null
@@ -153,7 +160,7 @@ TrelloPowerUp.initialize({
             if (statusData && statusData.totalPastSeconds > 0) {
                 return [{
                     text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
-                    refresh: 5 
+                    refresh: 2 
                 }];
             }
 
@@ -178,14 +185,12 @@ TrelloPowerUp.initialize({
 
                             var now = new Date();
                             var start = new Date(newStatus.activeTimerData.startTime);
-                            
                             var currentSession = Math.floor((now - start) / 1000);
-                            
                             var total = currentSession + (newStatus.totalPastSeconds || 0);
                             
                             return {
-                                title: "Tempo Total", 
-                                text: formatTime(total), 
+                                title: "Tempo Total",
+                                text: formatTime(total),
                                 color: "green",
                                 refresh: 1,
                                 callback: function(t) {
