@@ -127,6 +127,7 @@ def delete_log(log_id: str):
 
 @app.get("/timer/status/{member_id}/{card_id}")
 def get_timer_status(member_id: str, card_id: str):
+    print(f"🔎 DEBUG: Usuário {member_id} perguntou do Card {card_id}")
     card_timer = next((t for t in active_timers if str(t["cardId"]) == str(card_id)), None)
     user_timer = next((t for t in active_timers if str(t["memberId"]) == str(member_id)), None)
     

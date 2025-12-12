@@ -21,6 +21,7 @@ function callBackend(endpoint, method, body = null) {
     };
 
     let url = `${NODE_API_BASE_URL}/${endpoint}`;
+    // Cache Busting: Adiciona timestamp no GET para evitar cache
     if (method === 'GET') {
         const separator = url.includes('?') ? '&' : '?';
         url += `${separator}_t=${Date.now()}`; 
@@ -41,6 +42,7 @@ function callBackend(endpoint, method, body = null) {
     });
 }
 
+// Força atualização no Board (para pausar outros) e no Card (para mostrar verde)
 function forceGlobalRefresh(t) {
     return Promise.all([
         t.set('board', 'shared', 'refresh', Math.random()),
@@ -49,184 +51,198 @@ function forceGlobalRefresh(t) {
 }
 
 TrelloPowerUp.initialize({
+    // --- BOTÕES LATERAIS ---
     'card-buttons': function(t, options){
-        var context = t.getContext();
         return Promise.all([
-            callBackend(`timer/status/${context.member}/${context.card}`, 'GET'),
-            t.member('fullName')
+            t.card('id'), // 1. Pega o ID Seguro (Longo)
+            t.member('fullName'),
+            t.getContext()
         ])
-        .then(function([statusData, memberData]) {
-            var timerButton = null;
+        .then(function([cardId, memberName, context]) {
+            // Usa 'cardId' seguro na URL
+            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+            .then(function(statusData) {
+                var timerButton = null;
 
-            if (statusData && statusData.isRunningHere) {
-                timerButton = {
-                    icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
-                    text: 'Pausar Timer',
+                if (statusData && statusData.isRunningHere) {
+                    timerButton = {
+                        icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
+                        text: 'Pausar Timer',
+                        callback: function(t) {
+                            return callBackend('timer/stop', 'POST', {
+                                memberId: context.member,
+                                cardId: cardId // Envia ID Seguro
+                            })
+                            .then(data => {
+                                return forceGlobalRefresh(t)
+                                .then(() => {
+                                    t.alert({ 
+                                        message: `Pausado! Tempo: ${formatTime(data.newTotalSeconds)}`, 
+                                        duration: 3, 
+                                        display: 'success' 
+                                    });
+                                });
+                            });
+                        } 
+                    };
+                } else {
+                    var btnText = (statusData && statusData.isOtherTimerRunning) ? 'Iniciar (Pausará Outro)' : 'Iniciar Timer';
+                    timerButton = {
+                        icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
+                        text: btnText,
+                        callback: function(t){
+                            return callBackend('timer/start', 'POST', {
+                                memberId: context.member,
+                                cardId: cardId, // Envia ID Seguro
+                                memberName: memberName
+                            })
+                            .then(() => {
+                                return forceGlobalRefresh(t)
+                                .then(() => {
+                                    t.alert({ 
+                                        message: 'Timer iniciado!', 
+                                        duration: 2,
+                                        display: 'info'
+                                    });
+                                });
+                            });
+                        }
+                    };
+                }
+
+                var settingsButton = {
+                    icon: `${GITHUB_PAGES_BASE}/img/settings.svg`, 
+                    text: 'Configurar Limite',
                     callback: function(t) {
-                        return callBackend('timer/stop', 'POST', {
-                            memberId: context.member,
-                            cardId: context.card
-                        })
-                        .then(data => {
-                            return forceGlobalRefresh(t)
-                            .then(() => {
-                                t.alert({ 
-                                    message: `Pausado! Tempo: ${formatTime(data.newTotalSeconds)}`, 
-                                    duration: 3, 
-                                    display: 'success' 
-                                });
-                            });
-                        });
-                    } 
-                };
-            } else {
-                var btnText = (statusData && statusData.isOtherTimerRunning) ? 'Iniciar (Pausará Outro)' : 'Iniciar Timer';
-                timerButton = {
-                    icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
-                    text: btnText,
-                    callback: function(t){
-                        return callBackend('timer/start', 'POST', {
-                            memberId: context.member,
-                            cardId: context.card,
-                            memberName: memberData.fullName
-                        })
-                        .then(() => {
-                            return forceGlobalRefresh(t)
-                            .then(() => {
-                                t.alert({ 
-                                    message: 'Timer iniciado!', 
-                                    duration: 2,
-                                    display: 'info'
-                                });
-                            });
+                        return t.modal({
+                            title: 'Gestão deste Cartão',
+                            // Passa ID Seguro para o Dashboard
+                            url: `${GITHUB_PAGES_BASE}/dashboard/dashboard.html?cardId=${cardId}`, 
+                            accentColor: '#0079BF', 
+                            height: 500, 
+                            fullscreen: false
                         });
                     }
                 };
-            }
 
-            var settingsButton = {
-                icon: `${GITHUB_PAGES_BASE}/img/settings.svg`, 
-                text: 'Configurar Limite',
-                callback: function(t) {
-                    return t.modal({
-                        title: 'Gestão deste Cartão',
-                        url: `${GITHUB_PAGES_BASE}/dashboard/dashboard.html?cardId=${context.card}`, 
-                        accentColor: '#0079BF', 
-                        height: 500, 
-                        fullscreen: false
-                    });
-                }
-            };
-
-            return [timerButton, settingsButton];
+                return [timerButton, settingsButton];
+            });
         })
         .catch(err => { 
             return []; 
         });
     },
 
+    // --- BADGES DE CAPA ---
     'card-badges': function(t, options){
-        var context = t.getContext();
-        return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
-        .then(function(statusData) {
-            
-            if (statusData && statusData.forceRefresh) {
-                 forceGlobalRefresh(t);
-                 fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${context.card}`, {
-                    method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
-                 }).catch(err => {});
-            }
+        return t.card('id') // Pega ID Seguro
+        .then(function(cardId) {
+            var context = t.getContext();
+            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+            .then(function(statusData) {
+                
+                if (statusData && statusData.forceRefresh) {
+                     forceGlobalRefresh(t);
+                     fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${cardId}`, {
+                        method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
+                     }).catch(err => {});
+                }
 
-            if (statusData && statusData.activeTimerData) {
-                return [{
-                    dynamic: function() {
-                        return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
-                        .then(newStatus => {
-                            if (!newStatus.activeTimerData) {
-                                forceGlobalRefresh(t);
-                                return { text: 'Parando...', color: 'red', refresh: 1 };
-                            }
+                // Verifica se ALGUÉM (qualquer pessoa) está rodando
+                if (statusData && statusData.activeTimerData) {
+                    return [{
+                        dynamic: function() {
+                            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+                            .then(newStatus => {
+                                if (!newStatus.activeTimerData) {
+                                    forceGlobalRefresh(t);
+                                    return { text: 'Parando...', color: 'red', refresh: 1 };
+                                }
 
-                            var now = new Date();
-                            var start = new Date(newStatus.activeTimerData.startTime);
-                            if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
+                                var now = new Date();
+                                var start = new Date(newStatus.activeTimerData.startTime);
+                                if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
 
-                            var currentSession = Math.floor((now - start) / 1000);
-                            var total = currentSession + (newStatus.totalPastSeconds || 0);
+                                var currentSession = Math.floor((now - start) / 1000);
+                                var total = currentSession + (newStatus.totalPastSeconds || 0);
 
-                            var label = '⏱️ ';
-                             if (!newStatus.isRunningHere) label = '👤 ' + newStatus.activeTimerData.memberName + ': ';
+                                var label = '⏱️ ';
+                                if (!newStatus.isRunningHere) label = '👤 ' + newStatus.activeTimerData.memberName + ': ';
 
-                            return {
-                                text: label + formatTime(total),
-                                color: 'green',
-                                refresh: 2
-                            };
-                        });
-                    }
-                }];
-            }
-            
-            if (statusData && statusData.totalPastSeconds > 0) {
-                return [{
-                    text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
-                    refresh: 5 
-                }];
-            }
+                                return {
+                                    text: label + formatTime(total),
+                                    color: 'green',
+                                    refresh: 2
+                                };
+                            });
+                        }
+                    }];
+                }
+                
+                if (statusData && statusData.totalPastSeconds > 0) {
+                    return [{
+                        text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
+                        refresh: 5 
+                    }];
+                }
 
-            return [];
+                return [];
+            });
         })
         .catch(() => []);
     },
 
+    // --- BADGES DETALHADOS (DENTRO DO CARTÃO) ---
     'card-detail-badges': function(t, options) {
-        var context = t.getContext();
-        return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
-        .then(function(statusData) {
-            
-            if (statusData && statusData.activeTimerData) {
-                return [{
-                    dynamic: function() {
-                        return callBackend(`timer/status/${context.member}/${context.card}`, 'GET')
-                        .then(newStatus => {
-                            if (!newStatus.activeTimerData) {
-                                forceGlobalRefresh(t);
-                                return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 1 };
-                            }
+        return t.card('id') // Pega ID Seguro
+        .then(function(cardId) {
+            var context = t.getContext();
+            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+            .then(function(statusData) {
+                
+                if (statusData && statusData.activeTimerData) {
+                    return [{
+                        dynamic: function() {
+                            return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
+                            .then(newStatus => {
+                                if (!newStatus.activeTimerData) {
+                                    forceGlobalRefresh(t);
+                                    return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 1 };
+                                }
 
-                            var now = new Date();
-                            var start = new Date(newStatus.activeTimerData.startTime);
-                            var currentSession = Math.floor((now - start) / 1000);
-                            var total = currentSession + (newStatus.totalPastSeconds || 0);
-                        
-                            var stopCallback = function(t) {
-                                return callBackend('timer/stop', 'POST', {
-                                    memberId: context.member, 
+                                var now = new Date();
+                                var start = new Date(newStatus.activeTimerData.startTime);
+                                var currentSession = Math.floor((now - start) / 1000);
+                                var total = currentSession + (newStatus.totalPastSeconds || 0);
+                            
+                                var stopCallback = function(t) {
+                                    return callBackend('timer/stop', 'POST', {
+                                        memberId: context.member, 
+                                        cardId: cardId // ID Seguro
+                                    })
+                                    .then(data => {
+                                         return forceGlobalRefresh(t)
+                                         .then(() => t.alert({ message: "Timer Parado!" }));
+                                    });
+                                };
 
-                                    cardId: context.card
-                                })
-                                .then(data => {
-                                     return forceGlobalRefresh(t)
-                                     .then(() => t.alert({ message: "Timer Parado!" }));
-                                });
-                            };
+                                if (!newStatus.isRunningHere) {
+                                    stopCallback = null;
+                                }
 
-                            if (!newStatus.isRunningHere) {
-                                stopCallback = null;
-                            }
-
-                            return {
-                                title: "Tempo Total" + (newStatus.isRunningHere ? "" : ` (${newStatus.activeTimerData.memberName})`),
-                                text: formatTime(total),
-                                color: "green",
-                                refresh: 1,
-                                callback: stopCallback
-                            };
-                        });
-                    }
-                }];
-            }
-            return [];
+                                return {
+                                    title: "Tempo Total" + (newStatus.isRunningHere ? "" : ` (${newStatus.activeTimerData.memberName})`),
+                                    text: formatTime(total),
+                                    color: "green",
+                                    refresh: 1,
+                                    callback: stopCallback
+                                };
+                            });
+                        }
+                    }];
+                }
+                return [];
+            });
         })
         .catch(() => []);
     }
