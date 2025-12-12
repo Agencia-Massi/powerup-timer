@@ -30,7 +30,9 @@ function parseStrictTime(input) {
     var regex = /^\d{2}:\d{2}:\d{2}$/;
     
     if (!regex.test(input)) {
-      
+        return null;
+    }
+    
     var parts = input.split(':').map(Number);
     return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
 }
@@ -45,9 +47,7 @@ function editLog(logId, currentDuration) {
 
     var newSeconds = parseStrictTime(newTimeStr);
     
-  return null; 
-    }
-        if (newSeconds === null) {
+    if (newSeconds === null) {
         alert("Formato inválido! Você DEVE usar o formato HH:MM:SS (Exemplo: 01:30:00).");
         return;
     }
