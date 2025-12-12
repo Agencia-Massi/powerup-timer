@@ -26,18 +26,19 @@ function formatIsoDateToTime(isoDateString) {
 
 function parseStrictTime(input) {
     if (!input) return null;
-    
     var regex = /^\d{2}:\d{2}:\d{2}$/;
-    
-    if (!regex.test(input)) {
-        return null;
-    }
-    
+    if (!regex.test(input)) return null;
     var parts = input.split(':').map(Number);
     return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
 }
 
 var cardId = getUrlParameter('cardId');
+
+
+if (cardId.includes('object')) {
+    document.body.innerHTML = '<h3 style="color:red; padding:20px;">Erro de Cache detectado!<br>Por favor, feche esta janela e dê um Refresh (F5) na página do Trello.</h3>';
+    throw new Error("ID Inválido detectado");
+}
 
 function editLog(logId, currentDuration) {
     var currentFormatted = formatTime(currentDuration);
@@ -60,10 +61,7 @@ function editLog(logId, currentDuration) {
         },
         body: JSON.stringify({ duration: newSeconds })
     })
-    .then(response => {
-        if (!response.ok) throw new Error('Erro na API');
-        return response.json();
-    })
+    .then(res => res.json())
     .then(() => {
         loadDashboardData(); 
         return t.set('board', 'shared', 'refresh', Math.random());
@@ -86,10 +84,7 @@ function deleteLog(logId) {
             'ngrok-skip-browser-warning': 'true'
         }
     })
-    .then(response => {
-        if (!response.ok) throw new Error('Erro na API');
-        return response.json();
-    })
+    .then(res => res.json())
     .then(() => {
         loadDashboardData();
         return t.set('board', 'shared', 'refresh', Math.random());
@@ -104,7 +99,8 @@ function deleteLog(logId) {
 }
 
 function loadDashboardData() {
-    fetch(`${NODE_API_BASE_URL}/timer/logs/${cardId}`, {
+    // Adicionamos o timestamp _t para evitar cache do navegador nos logs
+    fetch(`${NODE_API_BASE_URL}/timer/logs/${cardId}?_t=${Date.now()}`, {
         method: 'GET',
         headers: { 
             'ngrok-skip-browser-warning': 'true' 
@@ -126,7 +122,6 @@ function loadDashboardData() {
 
         data.logs.forEach(log => {
             var row = document.createElement('tr');
-            
             var actionsHtml = '';
             
             if (log.id) {
@@ -173,7 +168,7 @@ function saveSettings() {
             timeLimit: timeLimitValue
         })
     })
-    .then(response => response.json())
+    .then(res => res.json())
     .then(data => {
         t.alert({
             message: 'Configuração salva com sucesso!',
@@ -192,7 +187,7 @@ function saveSettings() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    if (cardId) {
+    if (cardId && !cardId.includes('object')) {
         loadDashboardData();
     }
     document.getElementById('btnSaveConfig').addEventListener('click', saveSettings);
