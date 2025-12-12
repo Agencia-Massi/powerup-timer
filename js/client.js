@@ -3,6 +3,7 @@ var Promise = TrelloPowerUp.Promise;
 const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev';
 const GITHUB_PAGES_BASE = 'https://miguelnsimoes.github.io/meu-trello-timer';
 
+// --- CURA DO ID (Mantida) ---
 function getSafeId(incomingId) {
     if (typeof incomingId === 'object' && incomingId !== null) {
         return incomingId.id || incomingId; 
@@ -59,11 +60,15 @@ TrelloPowerUp.initialize({
     'card-buttons': function(t, options){
         return Promise.all([
             t.card('id'), 
-            t.member('fullName'),
+            t.member('all'), // MUDANÇA: Pega o objeto completo para evitar erros
             t.getContext()
         ])
-        .then(function([rawCardId, memberName, context]) {
+        .then(function([rawCardId, memberObj, context]) {
+            
             var cardId = getSafeId(rawCardId);
+            
+            // MUDANÇA: Garante que pegamos o texto do nome
+            var safeMemberName = memberObj ? (memberObj.fullName || memberObj.username || 'Usuário') : 'Desconhecido';
 
             return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
             .then(function(statusData) {
@@ -99,7 +104,7 @@ TrelloPowerUp.initialize({
                             return callBackend('timer/start', 'POST', {
                                 memberId: context.member,
                                 cardId: cardId, 
-                                memberName: memberName
+                                memberName: safeMemberName // Manda o nome limpo
                             })
                             .then(() => {
                                 return forceGlobalRefresh(t)
@@ -137,6 +142,7 @@ TrelloPowerUp.initialize({
         });
     },
 
+    // --- BADGES DE CAPA ---
     'card-badges': function(t, options){
         return t.card('id')
         .then(function(rawCardId) {
@@ -196,6 +202,7 @@ TrelloPowerUp.initialize({
         .catch(() => []);
     },
 
+    // --- BADGES DETALHADOS ---
     'card-detail-badges': function(t, options) {
         return t.card('id')
         .then(function(rawCardId) {
