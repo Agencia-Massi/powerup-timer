@@ -21,7 +21,7 @@ function callBackend(endpoint, method, body = null) {
     };
 
     let url = `${NODE_API_BASE_URL}/${endpoint}`;
-    // Cache Busting: Adiciona timestamp no GET para evitar cache
+
     if (method === 'GET') {
         const separator = url.includes('?') ? '&' : '?';
         url += `${separator}_t=${Date.now()}`; 
@@ -42,7 +42,7 @@ function callBackend(endpoint, method, body = null) {
     });
 }
 
-// Força atualização no Board (para pausar outros) e no Card (para mostrar verde)
+
 function forceGlobalRefresh(t) {
     return Promise.all([
         t.set('board', 'shared', 'refresh', Math.random()),
@@ -51,15 +51,13 @@ function forceGlobalRefresh(t) {
 }
 
 TrelloPowerUp.initialize({
-    // --- BOTÕES LATERAIS ---
     'card-buttons': function(t, options){
         return Promise.all([
-            t.card('id'), // 1. Pega o ID Seguro (Longo)
+            t.card('id'), 
             t.member('fullName'),
             t.getContext()
         ])
         .then(function([cardId, memberName, context]) {
-            // Usa 'cardId' seguro na URL
             return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
             .then(function(statusData) {
                 var timerButton = null;
@@ -93,7 +91,7 @@ TrelloPowerUp.initialize({
                         callback: function(t){
                             return callBackend('timer/start', 'POST', {
                                 memberId: context.member,
-                                cardId: cardId, // Envia ID Seguro
+                                cardId: cardId, 
                                 memberName: memberName
                             })
                             .then(() => {
@@ -116,7 +114,6 @@ TrelloPowerUp.initialize({
                     callback: function(t) {
                         return t.modal({
                             title: 'Gestão deste Cartão',
-                            // Passa ID Seguro para o Dashboard
                             url: `${GITHUB_PAGES_BASE}/dashboard/dashboard.html?cardId=${cardId}`, 
                             accentColor: '#0079BF', 
                             height: 500, 
@@ -133,9 +130,8 @@ TrelloPowerUp.initialize({
         });
     },
 
-    // --- BADGES DE CAPA ---
     'card-badges': function(t, options){
-        return t.card('id') // Pega ID Seguro
+        return t.card('id') 
         .then(function(cardId) {
             var context = t.getContext();
             return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
@@ -148,7 +144,6 @@ TrelloPowerUp.initialize({
                      }).catch(err => {});
                 }
 
-                // Verifica se ALGUÉM (qualquer pessoa) está rodando
                 if (statusData && statusData.activeTimerData) {
                     return [{
                         dynamic: function() {
@@ -192,9 +187,9 @@ TrelloPowerUp.initialize({
         .catch(() => []);
     },
 
-    // --- BADGES DETALHADOS (DENTRO DO CARTÃO) ---
+
     'card-detail-badges': function(t, options) {
-        return t.card('id') // Pega ID Seguro
+        return t.card('id')
         .then(function(cardId) {
             var context = t.getContext();
             return callBackend(`timer/status/${context.member}/${cardId}`, 'GET')
@@ -218,7 +213,7 @@ TrelloPowerUp.initialize({
                                 var stopCallback = function(t) {
                                     return callBackend('timer/stop', 'POST', {
                                         memberId: context.member, 
-                                        cardId: cardId // ID Seguro
+                                        cardId: cardId 
                                     })
                                     .then(data => {
                                          return forceGlobalRefresh(t)
