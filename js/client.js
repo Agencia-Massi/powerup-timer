@@ -1,7 +1,11 @@
 var Promise = TrelloPowerUp.Promise;
 
+
 const NODE_API_BASE_URL = 'https://miguel-powerup-trello.jcceou.easypanel.host';
-const GITHUB_PAGES_BASE = 'https://agencia-massi.github.io/powerup-timer/'; 
+
+const GITHUB_PAGES_BASE = 'https://agencia-massi.github.io/powerup-timer'; 
+
+// ----------------------------------
 
 function getSafeId(incomingId) {
     if (typeof incomingId === 'object' && incomingId !== null) {
@@ -17,6 +21,8 @@ function getSafeName(memberObj) {
 }
 
 function formatTime(totalSeconds) {
+    if (totalSeconds < 0) totalSeconds = 0;
+
     var hours = Math.floor(totalSeconds / 3600);
     var minutes = Math.floor((totalSeconds % 3600) / 60);
     var seconds = Math.floor(totalSeconds % 60);
@@ -29,8 +35,7 @@ function formatTime(totalSeconds) {
 
 function callBackend(endpoint, method, body = null) {
     const headers = {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true'
+        'Content-Type': 'application/json'
     };
 
     let url = `${NODE_API_BASE_URL}/${endpoint}`;
@@ -160,7 +165,7 @@ TrelloPowerUp.initialize({
                 if (statusData && statusData.forceRefresh) {
                      forceGlobalRefresh(t);
                      fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${cardId}`, {
-                        method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
+                        method: 'POST'
                      }).catch(err => {});
                 }
 
@@ -175,7 +180,13 @@ TrelloPowerUp.initialize({
                                 }
 
                                 var now = new Date();
-                                var start = new Date(newStatus.activeTimerData.startTime);
+                                
+                                var startTimeStr = newStatus.activeTimerData.startTime;
+                                if (!startTimeStr.endsWith("Z")) {
+                                    startTimeStr += "Z";
+                                }
+                                var start = new Date(startTimeStr);
+
                                 if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
 
                                 var currentSession = Math.floor((now - start) / 1000);
@@ -229,7 +240,13 @@ TrelloPowerUp.initialize({
                                 }
 
                                 var now = new Date();
-                                var start = new Date(newStatus.activeTimerData.startTime);
+
+                                var startTimeStr = newStatus.activeTimerData.startTime;
+                                if (!startTimeStr.endsWith("Z")) {
+                                    startTimeStr += "Z";
+                                }
+                                var start = new Date(startTimeStr);
+
                                 var currentSession = Math.floor((now - start) / 1000);
                                 var total = currentSession + (newStatus.totalPastSeconds || 0);
                             
