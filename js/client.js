@@ -1,7 +1,7 @@
 var Promise = TrelloPowerUp.Promise;
 
-const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev';
-const GITHUB_PAGES_BASE = 'https://miguelnsimoes.github.io/meu-trello-timer';
+const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev'; //trocar aqui pelo link do ngrok se quiser fazer autoamcao yasmin ;)
+const GITHUB_PAGES_BASE = 'https://agencia-massi.github.io/powerup-timer/'; 
 
 function getSafeId(incomingId) {
     if (typeof incomingId === 'object' && incomingId !== null) {
