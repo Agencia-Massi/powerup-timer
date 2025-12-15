@@ -1,5 +1,5 @@
 var t = TrelloPowerUp.iframe();
-const NODE_API_BASE_URL = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev';
+const NODE_API_BASE_URL = 'https://miguel-powerup-trello.jcceou.easypanel.host';
 
 function getUrlParameter(name) {
     name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
