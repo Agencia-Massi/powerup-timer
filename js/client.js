@@ -12,6 +12,14 @@ let QUEUE = new Set()
 let RESOLVERS = []
 let CURRENT_MEMBER = null
 
+function forceRefresh(t) {
+  LAST_FETCH = 0
+  return Promise.all([
+    t.set('board', 'shared', 'refresh', Math.random()),
+    t.set('card', 'shared', 'refresh', Math.random())
+  ])
+}
+
 function fetchBatch() {
   const ids = Array.from(QUEUE)
   QUEUE.clear()
@@ -51,13 +59,6 @@ function formatMinutes(seconds) {
   return Math.floor(seconds / 60) + ' min'
 }
 
-function forceRefresh(t) {
-  return Promise.all([
-    t.set('board', 'shared', 'refresh', Math.random()),
-    t.set('card', 'shared', 'refresh', Math.random())
-  ])
-}
-
 TrelloPowerUp.initialize({
 
   'card-buttons': function (t) {
@@ -82,7 +83,15 @@ TrelloPowerUp.initialize({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memberId, cardId })
-              }).then(() => forceRefresh(t))
+              }).then(() =>
+                forceRefresh(t).then(() =>
+                  t.alert({
+                    message: '⏸️ Timer pausado',
+                    duration: 2,
+                    display: 'success'
+                  })
+                )
+              )
           }]
         }
 
@@ -94,7 +103,15 @@ TrelloPowerUp.initialize({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ memberId, cardId, memberName })
-            }).then(() => forceRefresh(t))
+            }).then(() =>
+              forceRefresh(t).then(() =>
+                t.alert({
+                  message: '⏱️ Timer iniciado',
+                  duration: 2,
+                  display: 'info'
+                })
+              )
+            )
         }]
       })
     })
@@ -132,7 +149,7 @@ TrelloPowerUp.initialize({
         if (status.totalPastSeconds > 0) {
           return [{
             text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
-            color: 'green',
+            color: 'light-gray',
             refresh: 60
           }]
         }
