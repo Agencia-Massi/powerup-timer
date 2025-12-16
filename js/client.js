@@ -158,12 +158,6 @@ TrelloPowerUp.initialize({
 
             return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
             .then(function(statusData) {
-                
-                if (statusData && statusData.forceRefresh) {
-                     fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${cardId}`, {
-                        method: 'POST'
-                     }).catch(err => {});
-                }
 
                 if (statusData && statusData.activeTimerData) {
                     return [{
@@ -181,7 +175,6 @@ TrelloPowerUp.initialize({
 
                                 var currentSession = Math.floor((now - start) / 1000);
                                 var totalSeconds = currentSession + (newStatus.totalPastSeconds || 0);
-                                
                                 var totalMinutes = Math.floor(totalSeconds / 60);
 
                                 var label = '🟢 ';
