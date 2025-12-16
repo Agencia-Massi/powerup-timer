@@ -221,7 +221,7 @@ TrelloPowerUp.initialize({
                             return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
                             .then(newStatus => {
                                 if (!newStatus.activeTimerData) {
-                                    forceGlobalRefresh(t);
+                                    
                                     return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 10 };
                                 }
 
