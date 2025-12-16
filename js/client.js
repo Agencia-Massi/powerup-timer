@@ -8,17 +8,23 @@ const NODE_API_BASE_URL = 'https://miguel-powerup-trello.jcceou.easypanel.host';
 const GITHUB_PAGES_BASE = 'https://agencia-massi.github.io/powerup-timer';
 
 /* ==============================
-   CACHE GLOBAL E VARIÁVEIS
+   ESTADO GLOBAL & CACHE
 ================================ */
+// Armazena o status de cada cartão: { 'cardId': { ...data... } }
 const STATUS_CACHE = {};
-let LAST_SYNC = 0;
-const POLL_INTERVAL = 5000; // Sincroniza a cada 5 segundos no máximo
 
-let CURRENT_MEMBER = null;
-let CURRENT_CARDS = [];
+// Controle de tempo para evitar chamadas excessivas
+let LAST_FETCH_TIME = 0;
+const CACHE_TTL = 15000; // 15 segundos de vida útil do cache
+
+// Variáveis para o Debounce (O segredo da performance)
+let debounceTimer = null;
+let pendingResolveFunctions = []; // Quem está esperando a resposta
+let collectedCardIds = new Set(); // IDs coletados para buscar
+let currentMemberId = null;
 
 /* ==============================
-   FUNÇÕES AUXILIARES (Resgatadas)
+   FUNÇÕES AUXILIARES
 ================================ */
 function getSafeId(obj) {
   if (typeof obj === 'object' && obj !== null) return obj.id || JSON.stringify(obj);
@@ -43,7 +49,7 @@ function formatTime(totalSeconds) {
     return h + m + ':' + s;
 }
 
-// Função para chamar o backend (essencial para os botões funcionarem)
+// Chamada direta para ações (Start/Stop) - não usa cache
 function callBackend(endpoint, method, body = null) {
     const headers = { 'Content-Type': 'application/json' };
     let url = `${NODE_API_BASE_URL}/${endpoint}`;
@@ -62,45 +68,75 @@ function callBackend(endpoint, method, body = null) {
     });
 }
 
+// Força atualização visual
 function forceGlobalRefresh(t) {
-    // Força atualização dos dados do cache imediatamente
-    LAST_SYNC = 0; 
-    return syncStatus().then(() => {
-        return Promise.all([
-            t.set('board', 'shared', 'refresh', Math.random()),
-            t.set('card', 'shared', 'refresh', Math.random())
-        ]);
-    });
+    LAST_FETCH_TIME = 0; // Invalida o cache para forçar busca nova
+    return Promise.all([
+        t.set('board', 'shared', 'refresh', Math.random()),
+        t.set('card', 'shared', 'refresh', Math.random())
+    ]);
 }
 
 /* ==============================
-   SINCRONIZAÇÃO EM LOTE (O Segredo da Performance)
+   MOTOR DE BUSCA OTIMIZADO (BATCH + DEBOUNCE)
 ================================ */
-function syncStatus() {
-  const now = Date.now();
+function getBatchStatus(cardId, memberId) {
+    currentMemberId = memberId;
+    collectedCardIds.add(cardId);
 
-  // Se já sincronizou há menos de 5 segundos, usa o cache (não chama o servidor)
-  if (now - LAST_SYNC < POLL_INTERVAL) {
-    return Promise.resolve();
-  }
+    // Se já temos dados frescos no cache, retorna imediatamente (sem ir ao servidor)
+    const now = Date.now();
+    if (STATUS_CACHE[cardId] && (now - LAST_FETCH_TIME < CACHE_TTL)) {
+        return Promise.resolve(STATUS_CACHE[cardId]);
+    }
 
-  if (!CURRENT_MEMBER || CURRENT_CARDS.length === 0) {
-    return Promise.resolve();
-  }
+    // Se não tem cache, agendamos uma busca
+    return new Promise((resolve) => {
+        pendingResolveFunctions.push(resolve);
 
-  LAST_SYNC = now;
+        // Se já tem um timer rodando, cancela ele (reinicia a contagem de espera)
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
 
-  // Chama a rota OTIMIZADA que pega tudo de uma vez
-  const url = `${NODE_API_BASE_URL}/timer/status/bulk` +
-    `?memberId=${CURRENT_MEMBER}` +
-    `&cardIds=${CURRENT_CARDS.join(',')}`;
+        // Define novo timer: espera 150ms para ver se chegam mais cartões
+        debounceTimer = setTimeout(() => {
+            executeFetch();
+        }, 150);
+    });
+}
 
-  return fetch(url)
-    .then(r => r.json())
-    .then(data => {
-      Object.assign(STATUS_CACHE, data); // Atualiza o cache global
-    })
-    .catch(() => {});
+function executeFetch() {
+    if (collectedCardIds.size === 0) return;
+
+    const idsToFetch = Array.from(collectedCardIds);
+    const memberToFetch = currentMemberId;
+    
+    // Limpa a fila para a próxima rodada
+    const resolversToNotify = [...pendingResolveFunctions];
+    pendingResolveFunctions = [];
+    collectedCardIds.clear();
+    debounceTimer = null;
+
+    // Constrói a URL Bulk
+    const url = `${NODE_API_BASE_URL}/timer/status/bulk` +
+                `?memberId=${memberToFetch}` +
+                `&cardIds=${idsToFetch.join(',')}`;
+
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            LAST_FETCH_TIME = Date.now();
+            Object.assign(STATUS_CACHE, data); // Atualiza cache global
+            
+            // Avisa todo mundo que estava esperando
+            resolversToNotify.forEach(resolve => resolve(data)); 
+        })
+        .catch(err => {
+            console.error("Erro no fetch bulk:", err);
+            // Em caso de erro, libera as promises para não travar o Trello
+            resolversToNotify.forEach(resolve => resolve({}));
+        });
 }
 
 /* ==============================
@@ -109,7 +145,7 @@ function syncStatus() {
 TrelloPowerUp.initialize({
 
   /* --------------------------
-     BOTÕES DO CARTÃO (Lógica Restaurada)
+     BOTÕES DO CARTÃO
   --------------------------- */
   'card-buttons': function (t) {
     return Promise.all([
@@ -121,18 +157,13 @@ TrelloPowerUp.initialize({
       const memberId = getSafeId(context.member);
       const memberName = getSafeName(memberObj);
 
-      // Registra para o cache
-      CURRENT_MEMBER = memberId;
-      if (!CURRENT_CARDS.includes(cardId)) { CURRENT_CARDS.push(cardId); }
-
-      // Garante que temos dados atualizados antes de desenhar os botões
-      return syncStatus().then(() => {
+      // Usa o sistema otimizado para pegar os dados
+      return getBatchStatus(cardId, memberId).then(() => {
+          // Lê do cache, pois o getBatchStatus garantiu que ele está atualizado
           const statusData = STATUS_CACHE[cardId] || {};
           const buttons = [];
 
-          // 1. Botão de Timer (Iniciar ou Pausar)
           if (statusData && statusData.isRunningHere) {
-              // SE ESTÁ RODANDO -> MOSTRA PAUSAR
               buttons.push({
                   icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
                   text: 'Pausar Timer',
@@ -153,7 +184,6 @@ TrelloPowerUp.initialize({
                   } 
               });
           } else {
-              // SE ESTÁ PARADO -> MOSTRA INICIAR
               var btnText = (statusData && statusData.isOtherTimerRunning) ? 'Iniciar (Pausará Outro)' : 'Iniciar Timer';
               buttons.push({
                   icon: `${GITHUB_PAGES_BASE}/img/icon.svg`,
@@ -177,7 +207,6 @@ TrelloPowerUp.initialize({
               });
           }
 
-          // 2. Botão de Configurações
           buttons.push({
               icon: `${GITHUB_PAGES_BASE}/img/settings.svg`, 
               text: 'Configurar Limite',
@@ -198,23 +227,18 @@ TrelloPowerUp.initialize({
   },
 
   /* --------------------------
-     CAPA DO CARTÃO (Otimizado)
+     CAPA DO CARTÃO (Board View)
   --------------------------- */
   'card-badges': function (t) {
     return t.card('id').then(card => {
       const cardId = getSafeId(card.id);
       const memberId = getSafeId(t.getContext().member);
 
-      CURRENT_MEMBER = memberId;
-      if (!CURRENT_CARDS.includes(cardId)) { CURRENT_CARDS.push(cardId); }
-
-      return syncStatus().then(() => {
+      return getBatchStatus(cardId, memberId).then(() => {
         const status = STATUS_CACHE[cardId];
         if (!status) return [];
 
-        // Badge Verde (Em andamento)
         if (status.activeTimerData) {
-          // Cálculo local do tempo para mostrar "X min"
           var now = new Date();
           var startStr = status.activeTimerData.startTime;
           if (!startStr.endsWith("Z")) startStr += "Z";
@@ -227,13 +251,12 @@ TrelloPowerUp.initialize({
           if (!status.isRunningHere) label = '👤 ' + status.activeTimerData.memberName + ': ';
 
           return [{
-            text: label + totalMinutes + ' min', // Volta a mostrar os minutos!
+            text: label + totalMinutes + ' min',
             color: 'green',
-            refresh: 60 // Atualiza a cada 1 min
+            refresh: 60 // Atualiza a visualização a cada 1 min
           }];
         }
 
-        // Badge Pausado
         if (status.totalPastSeconds > 0) {
           return [{
             text: `⏸️ ${Math.floor(status.totalPastSeconds / 60)} min`,
@@ -254,14 +277,10 @@ TrelloPowerUp.initialize({
       const cardId = getSafeId(card.id);
       const memberId = getSafeId(t.getContext().member);
 
-      CURRENT_MEMBER = memberId;
-      if (!CURRENT_CARDS.includes(cardId)) { CURRENT_CARDS.push(cardId); }
-
-      return syncStatus().then(() => {
+      return getBatchStatus(cardId, memberId).then(() => {
         const status = STATUS_CACHE[cardId];
         if (!status || !status.activeTimerData) return [];
 
-        // Cálculo local para detalhe
         var now = new Date();
         var startStr = status.activeTimerData.startTime;
         if (!startStr.endsWith("Z")) startStr += "Z";
@@ -272,7 +291,7 @@ TrelloPowerUp.initialize({
 
         return [{
           title: 'Tempo Total' + (status.isRunningHere ? "" : ` (${status.activeTimerData.memberName})`),
-          text: totalMinutes + ' min', // Mostra minutos (safe mode)
+          text: totalMinutes + ' min',
           color: 'green',
           refresh: 60
         }];
