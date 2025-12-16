@@ -59,17 +59,22 @@ def send_to_n8n(payload):
 
 @app.get("/timer/status/bulk")
 def bulk_status(memberId: str, cardIds: str):
-    ids = cardIds.split(",")
+    if not cardIds:
+        return {}
+
+    ids = list(set(cardIds.split(",")))
 
     active = supabase.table("active_timers").select("*").in_("card_id", ids).execute().data
-    logs = supabase.table("time_logs").select("card_id,duration").in_("card_id", ids).execute().data
     user_timer = supabase.table("active_timers").select("*").eq("member_id", memberId).execute().data
 
     active_map = {a["card_id"]: a for a in active}
     past = {}
 
-    for log in logs:
-        past[log["card_id"]] = past.get(log["card_id"], 0) + log["duration"]
+    for i in range(0, len(ids), 20):
+        chunk = ids[i:i + 20]
+        logs = supabase.table("time_logs").select("card_id,duration").in_("card_id", chunk).execute().data
+        for log in logs:
+            past[log["card_id"]] = past.get(log["card_id"], 0) + log["duration"]
 
     current_user_timer = user_timer[0] if user_timer else None
 
