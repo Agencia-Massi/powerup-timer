@@ -1,78 +1,75 @@
-/* global TrelloPowerUp */
-var Promise = TrelloPowerUp.Promise;
+var Promise = TrelloPowerUp.Promise
 
-const API = 'https://miguel-powerup-trello.jcceou.easypanel.host';
-const ASSETS = 'https://agencia-massi.github.io/powerup-timer';
+const API = 'https://miguel-powerup-trello.jcceou.easypanel.host'
+const ASSETS = 'https://agencia-massi.github.io/powerup-timer'
 
-const CACHE = {};
-let LAST_FETCH = 0;
-const TTL = 15000;
+const CACHE = {}
+let LAST_FETCH = 0
+const TTL = 15000
 
-let DEBOUNCE = null;
-let QUEUE = new Set();
-let RESOLVERS = [];
-let CURRENT_MEMBER = null;
+let DEBOUNCE = null
+let QUEUE = new Set()
+let RESOLVERS = []
+let CURRENT_MEMBER = null
 
 function forceRefresh(t) {
-  LAST_FETCH = 0;
+  LAST_FETCH = 0
   return Promise.all([
     t.set('board', 'shared', 'refresh', Math.random()),
     t.set('card', 'shared', 'refresh', Math.random())
-  ]);
+  ])
 }
 
 function formatMinutes(seconds) {
-  if (seconds < 0) seconds = 0;
-  return Math.floor(seconds / 60) + ' min';
+  if (seconds < 0) seconds = 0
+  return Math.floor(seconds / 60) + ' min'
 }
 
 function formatTimeFull(totalSeconds) {
-    if (totalSeconds < 0) totalSeconds = 0;
-    var hours = Math.floor(totalSeconds / 3600);
-    var minutes = Math.floor((totalSeconds % 3600) / 60);
-    var seconds = Math.floor(totalSeconds % 60);
-    
-    var h = hours > 0 ? hours + ':' : '';
-    var m = (minutes < 10 ? '0' : '') + minutes;
-    var s = (seconds < 10 ? '0' : '') + seconds;
-    return h + m + ':' + s;
+  if (totalSeconds < 0) totalSeconds = 0
+  var h = Math.floor(totalSeconds / 3600)
+  var m = Math.floor((totalSeconds % 3600) / 60)
+  var s = Math.floor(totalSeconds % 60)
+  var hh = h > 0 ? h + ':' : ''
+  var mm = (m < 10 ? '0' : '') + m
+  var ss = (s < 10 ? '0' : '') + s
+  return hh + mm + ':' + ss
 }
 
 function fetchBatch() {
-  const ids = Array.from(QUEUE);
-  QUEUE.clear();
-
-  if (!ids.length) return;
+  const ids = Array.from(QUEUE)
+  QUEUE.clear()
+  if (!ids.length) return
 
   fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
     .then(r => r.json())
     .then(data => {
-      LAST_FETCH = Date.now();
+      LAST_FETCH = Date.now()
       ids.forEach(id => {
-        CACHE[id] = data[id] || null;
-      });
-      RESOLVERS.forEach(r => r());
-      RESOLVERS = [];
+        CACHE[id] = data[id] || null
+      })
+      RESOLVERS.forEach(r => r())
+      RESOLVERS = []
     })
     .catch(() => {
-      RESOLVERS.forEach(r => r());
-      RESOLVERS = [];
-    });
+      RESOLVERS.forEach(r => r())
+      RESOLVERS = []
+    })
 }
 
 function getStatus(cardId, memberId) {
-  CURRENT_MEMBER = memberId;
-  QUEUE.add(cardId);
+  CURRENT_MEMBER = memberId
+  QUEUE.add(cardId)
 
   if (CACHE[cardId] && Date.now() - LAST_FETCH < TTL) {
-    return Promise.resolve();
+    return Promise.resolve()
   }
 
   return new Promise(resolve => {
-    RESOLVERS.push(resolve);
-    clearTimeout(DEBOUNCE);
-    DEBOUNCE = setTimeout(fetchBatch, 150);
-  });
+    RESOLVERS.push(resolve)
+    clearTimeout(DEBOUNCE)
+    DEBOUNCE = setTimeout(fetchBatch, 150)
+  })
 }
 
 TrelloPowerUp.initialize({
@@ -83,14 +80,14 @@ TrelloPowerUp.initialize({
       t.member('all'),
       t.getContext()
     ]).then(([card, member, ctx]) => {
-      const cardId = card.id;
-      const memberId = ctx.member;
-      const memberName = member.fullName || 'Usuário';
+      const cardId = card.id
+      const memberId = ctx.member
+      const memberName = member.fullName || 'Usuário'
 
       return getStatus(cardId, memberId).then(() => {
-        const status = CACHE[cardId] || {};
-        let timerBtn;
-        
+        const status = CACHE[cardId] || {}
+        let timerBtn
+
         if (status.isRunningHere) {
           timerBtn = {
             icon: `${ASSETS}/img/icon.svg`,
@@ -104,10 +101,14 @@ TrelloPowerUp.initialize({
               .then(r => r.json())
               .then(data =>
                 forceRefresh(t).then(() =>
-                  t.alert({ message: `⏸️ Pausado: ${formatTimeFull(data.newTotalSeconds)}`, duration: 3, display: 'success' })
+                  t.alert({
+                    message: `⏸️ Pausado: ${formatTimeFull(data.newTotalSeconds)}`,
+                    duration: 3,
+                    display: 'success'
+                  })
                 )
               )
-          };
+          }
         } else {
           timerBtn = {
             icon: `${ASSETS}/img/icon.svg`,
@@ -119,95 +120,90 @@ TrelloPowerUp.initialize({
                 body: JSON.stringify({ memberId, cardId, memberName })
               }).then(() =>
                 forceRefresh(t).then(() =>
-                  t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
+                  t.alert({
+                    message: '⏱️ Timer iniciado',
+                    duration: 2,
+                    display: 'info'
+                  })
                 )
               )
-          };
+          }
         }
 
         const settingsBtn = {
-            icon: `${ASSETS}/img/settings.svg`, 
-            text: 'Configurar / Logs',
-            callback: function(t) {
-                return t.modal({
-                    title: 'Gestão de Tempo',
-                    url: `${ASSETS}/dashboard/dashboard.html?cardId=${cardId}`, 
-                    accentColor: '#0079BF', 
-                    height: 500, 
-                    fullscreen: false
-                });
-            }
-        };
+          icon: `${ASSETS}/img/settings.svg`,
+          text: 'Configurar / Logs',
+          callback: () =>
+            t.modal({
+              title: 'Gestão de Tempo',
+              url: `${ASSETS}/dashboard/dashboard.html?cardId=${cardId}`,
+              accentColor: '#0079BF',
+              height: 500,
+              fullscreen: false
+            })
+        }
 
-        return [timerBtn, settingsBtn];
-      });
-    });
+        return [timerBtn, settingsBtn]
+      })
+    })
   },
 
   'card-badges': function (t) {
     return t.card('id').then(card => {
-      const cardId = card.id;
-      const memberId = t.getContext().member;
+      const status = CACHE[card.id]
+      if (!status) return []
 
-      return getStatus(cardId, memberId).then(() => {
-        const status = CACHE[cardId];
+      if (status.activeTimerData) {
+        let startStr = status.activeTimerData.startTime
+        if (!startStr.endsWith('Z')) startStr += 'Z'
+        const start = new Date(startStr)
+        const now = new Date()
+        const running = Math.floor((now - start) / 1000)
+        const total = running + (status.totalPastSeconds || 0)
 
-        if (!status) return [];
-
-        if (status.activeTimerData) {
-          let startTimeStr = status.activeTimerData.startTime;
-          if (!startTimeStr.endsWith("Z")) startTimeStr += "Z";
-          const start = new Date(startTimeStr);
-          const now = new Date();
-          const running = Math.floor((now - start) / 1000);
-          const total = running + (status.totalPastSeconds || 0);
-
-          let label = '⏱️ ';
-          if (!status.isRunningHere) label = `👤 ${status.activeTimerData.memberName}: `;
-
-          return [{
-            text: label + formatMinutes(total),
-            color: 'green',
-            refresh: 60
-          }];
+        let label = '⏱️ '
+        if (!status.isRunningHere) {
+          label = `👤 ${status.activeTimerData.memberName}: `
         }
 
-        if (status.totalPastSeconds > 0) {
-          return [{
-            text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
-            color: 'light-gray',
-            refresh: 60
-          }];
-        }
+        return [{
+          text: label + formatMinutes(total),
+          color: 'green',
+          refresh: 60
+        }]
+      }
 
-        return [];
-      });
-    });
+      if (status.totalPastSeconds > 0) {
+        return [{
+          text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
+          color: 'light-gray',
+          refresh: 60
+        }]
+      }
+
+      return []
+    })
   },
 
   'card-detail-badges': function (t) {
-      return t.card('id').then(card => {
-          const cardId = card.id;
-          const memberId = t.getContext().member;
+    return t.card('id').then(card => {
+      const status = CACHE[card.id]
+      if (!status || !status.activeTimerData) return []
 
-          return getStatus(cardId, memberId).then(() => {
-              const status = CACHE[cardId];
-              if (!status || !status.activeTimerData) return [];
+      let startStr = status.activeTimerData.startTime
+      if (!startStr.endsWith('Z')) startStr += 'Z'
+      const start = new Date(startStr)
+      const now = new Date()
+      const running = Math.floor((now - start) / 1000)
+      const total = running + (status.totalPastSeconds || 0)
 
-              let startTimeStr = status.activeTimerData.startTime;
-              if (!startTimeStr.endsWith("Z")) startTimeStr += "Z";
-              const start = new Date(startTimeStr);
-              const now = new Date();
-              const running = Math.floor((now - start) / 1000);
-              const total = running + (status.totalPastSeconds || 0);
-
-              return [{
-                  title: 'Tempo Total',
-                  text: formatMinutes(total),
-                  color: 'green',
-                  refresh: 60
-              }];
-          });
-      });
+      return [{
+        title: 'Tempo Total',
+        text: formatMinutes(total),
+        color: 'green',
+        refresh: 60
+      }]
+    })
   }
-});
+
+})
