@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import os
 import requests
@@ -12,10 +12,9 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")
 
 app = FastAPI()
 
@@ -43,9 +42,12 @@ class Settings(BaseModel):
     cardId: str
     timeLimit: str
 
+def now_utc_iso():
+    return datetime.now(timezone.utc).isoformat()
+
 def calculate_duration(start_iso):
     start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-    now = datetime.now(start.tzinfo)
+    now = datetime.now(timezone.utc)
     diff = (now - start).total_seconds()
     return int(diff) if diff > 0 else 0
 
@@ -59,25 +61,19 @@ def send_to_n8n(payload):
 
 @app.get("/timer/status/bulk")
 def bulk_status(memberId: str, cardIds: str):
-    if not cardIds:
-        return {}
-
-    ids = list(set(cardIds.split(",")))
+    ids = cardIds.split(",")
 
     active = supabase.table("active_timers").select("*").in_("card_id", ids).execute().data
+    logs = supabase.table("time_logs").select("card_id,duration").in_("card_id", ids).execute().data
     user_timer = supabase.table("active_timers").select("*").eq("member_id", memberId).execute().data
 
     active_map = {a["card_id"]: a for a in active}
     past = {}
 
-    for i in range(0, len(ids), 20):
-        chunk = ids[i:i + 20]
-        logs = supabase.table("time_logs").select("card_id,duration").in_("card_id", chunk).execute().data
-        for log in logs:
-            past[log["card_id"]] = past.get(log["card_id"], 0) + log["duration"]
+    for log in logs:
+        past[log["card_id"]] = past.get(log["card_id"], 0) + log["duration"]
 
     current_user_timer = user_timer[0] if user_timer else None
-
     response = {}
 
     for cid in ids:
@@ -111,12 +107,13 @@ def deprecated_status(member_id: str, card_id: str):
 
 @app.post("/timer/start")
 def start_timer(body: StartTimer):
-    now = datetime.now().isoformat()
-    previous = supabase.table("active_timers").select("*").eq("member_id", body.memberId).execute().data
+    now = now_utc_iso()
 
+    previous = supabase.table("active_timers").select("*").eq("member_id", body.memberId).execute().data
     if previous:
         prev = previous[0]
         duration = calculate_duration(prev["start_time"])
+
         log = {
             "id": str(uuid.uuid4()),
             "card_id": prev["card_id"],
@@ -126,6 +123,7 @@ def start_timer(body: StartTimer):
             "date": now,
             "action": "auto_stop"
         }
+
         supabase.table("time_logs").insert(log).execute()
         supabase.table("active_timers").delete().eq("member_id", body.memberId).execute()
         send_to_n8n(log)
@@ -154,7 +152,7 @@ def stop_timer(body: StopTimer):
         "member_id": body.memberId,
         "member_name": timer["member_name"],
         "duration": duration,
-        "date": datetime.now().isoformat(),
+        "date": now_utc_iso(),
         "action": "manual_stop"
     }
 
@@ -166,12 +164,25 @@ def stop_timer(body: StopTimer):
 
 @app.get("/timer/logs/{card_id}")
 def logs(card_id: str):
-    logs = supabase.table("time_logs").select("*").eq("card_id", card_id).execute().data
-    settings = supabase.table("card_settings").select("*").eq("card_id", card_id).execute().data
+    res_logs = supabase.table("time_logs").select("*").eq("card_id", card_id).execute()
+    res_settings = supabase.table("card_settings").select("*").eq("card_id", card_id).execute()
+
+    formatted_logs = []
+
+    for log in res_logs.data:
+        formatted_logs.append({
+            "id": str(log["id"]),
+            "cardId": log["card_id"],
+            "memberId": log["member_id"],
+            "memberName": log["member_name"],
+            "duration": log["duration"],
+            "date": log["date"],
+            "action": log.get("action")
+        })
 
     return {
-        "logs": logs,
-        "timeLimit": settings[0]["time_limit"] if settings else ""
+        "logs": formatted_logs,
+        "timeLimit": res_settings.data[0]["time_limit"] if res_settings.data else ""
     }
 
 @app.put("/timer/logs/{log_id}")
