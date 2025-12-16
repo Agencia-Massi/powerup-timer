@@ -30,7 +30,11 @@ function fetchBatch() {
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
-      Object.assign(CACHE, data)
+
+      ids.forEach(id => {
+        CACHE[id] = data[id] || null
+      })
+
       RESOLVERS.forEach(r => r())
       RESOLVERS = []
     })
@@ -85,11 +89,7 @@ TrelloPowerUp.initialize({
                 body: JSON.stringify({ memberId, cardId })
               }).then(() =>
                 forceRefresh(t).then(() =>
-                  t.alert({
-                    message: '⏸️ Timer pausado',
-                    duration: 2,
-                    display: 'success'
-                  })
+                  t.alert({ message: '⏸️ Timer pausado', duration: 2, display: 'success' })
                 )
               )
           }]
@@ -105,11 +105,7 @@ TrelloPowerUp.initialize({
               body: JSON.stringify({ memberId, cardId, memberName })
             }).then(() =>
               forceRefresh(t).then(() =>
-                t.alert({
-                  message: '⏱️ Timer iniciado',
-                  duration: 2,
-                  display: 'info'
-                })
+                t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
               )
             )
         }]
@@ -126,11 +122,7 @@ TrelloPowerUp.initialize({
         const status = CACHE[cardId]
 
         if (!status) {
-          return [{
-            text: '--',
-            color: 'light-gray',
-            refresh: 60
-          }]
+          return []
         }
 
         if (status.activeTimerData) {
@@ -154,11 +146,7 @@ TrelloPowerUp.initialize({
           }]
         }
 
-        return [{
-          text: '--',
-          color: 'light-gray',
-          refresh: 60
-        }]
+        return []
       })
     })
   }
