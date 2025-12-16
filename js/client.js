@@ -2,10 +2,7 @@ var Promise = TrelloPowerUp.Promise;
 
 
 const NODE_API_BASE_URL = 'https://miguel-powerup-trello.jcceou.easypanel.host';
-
 const GITHUB_PAGES_BASE = 'https://agencia-massi.github.io/powerup-timer/'; 
-
-// ----------------------------------
 
 function getSafeId(incomingId) {
     if (typeof incomingId === 'object' && incomingId !== null) {
@@ -163,7 +160,6 @@ TrelloPowerUp.initialize({
             .then(function(statusData) {
                 
                 if (statusData && statusData.forceRefresh) {
-                     forceGlobalRefresh(t);
                      fetch(`${NODE_API_BASE_URL}/timer/clear_refresh_flag/${cardId}`, {
                         method: 'POST'
                      }).catch(err => {});
@@ -175,30 +171,26 @@ TrelloPowerUp.initialize({
                             return callBackend(`timer/status/${memberId}/${cardId}`, 'GET')
                             .then(newStatus => {
                                 if (!newStatus.activeTimerData) {
-                                    forceGlobalRefresh(t);
-                                    return { text: 'Parando...', color: 'red', refresh: 1 };
+                                    return { text: 'Parado', color: 'red', refresh: 10 };
                                 }
 
                                 var now = new Date();
-                                
                                 var startTimeStr = newStatus.activeTimerData.startTime;
-                                if (!startTimeStr.endsWith("Z")) {
-                                    startTimeStr += "Z";
-                                }
+                                if (!startTimeStr.endsWith("Z")) startTimeStr += "Z";
                                 var start = new Date(startTimeStr);
 
-                                if (isNaN(start.getTime())) return { text: 'Erro', color: 'red' };
-
                                 var currentSession = Math.floor((now - start) / 1000);
-                                var total = currentSession + (newStatus.totalPastSeconds || 0);
+                                var totalSeconds = currentSession + (newStatus.totalPastSeconds || 0);
+                                
+                                var totalMinutes = Math.floor(totalSeconds / 60);
 
-                                var label = '⏱️ ';
+                                var label = '🟢 ';
                                 if (!newStatus.isRunningHere) label = '👤 ' + newStatus.activeTimerData.memberName + ': ';
 
                                 return {
-                                    text: label + formatTime(total),
+                                    text: label + totalMinutes + ' min',
                                     color: 'green',
-                                    refresh: 2
+                                    refresh: 60 
                                 };
                             });
                         }
@@ -206,9 +198,10 @@ TrelloPowerUp.initialize({
                 }
                 
                 if (statusData && statusData.totalPastSeconds > 0) {
+                    var totalMinutesPast = Math.floor(statusData.totalPastSeconds / 60);
                     return [{
-                        text: '⏸️ ' + formatTime(statusData.totalPastSeconds),
-                        refresh: 5 
+                        text: '⏸️ ' + totalMinutesPast + ' min',
+                        refresh: 60 
                     }];
                 }
 
