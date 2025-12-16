@@ -5,42 +5,35 @@ const ASSETS = 'https://agencia-massi.github.io/powerup-timer'
 
 const CACHE = {}
 let LAST_FETCH = 0
-const TTL = 10000
+const TTL = 15000
 
 let DEBOUNCE = null
 let QUEUE = new Set()
-let RESOLVERS = {}
+let RESOLVERS = []
+let CURRENT_MEMBER = null
 
-function fetchBatch(memberId) {
+function fetchBatch() {
   const ids = Array.from(QUEUE)
   QUEUE.clear()
 
   if (!ids.length) return
 
-  fetch(`${API}/timer/status/bulk?memberId=${memberId}&cardIds=${ids.join(',')}`)
+  fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
       Object.assign(CACHE, data)
-
-      ids.forEach(id => {
-        if (RESOLVERS[id]) {
-          RESOLVERS[id]()
-          delete RESOLVERS[id]
-        }
-      })
+      RESOLVERS.forEach(r => r())
+      RESOLVERS = []
     })
     .catch(() => {
-      ids.forEach(id => {
-        if (RESOLVERS[id]) {
-          RESOLVERS[id]()
-          delete RESOLVERS[id]
-        }
-      })
+      RESOLVERS.forEach(r => r())
+      RESOLVERS = []
     })
 }
 
 function getStatus(cardId, memberId) {
+  CURRENT_MEMBER = memberId
   QUEUE.add(cardId)
 
   if (CACHE[cardId] && Date.now() - LAST_FETCH < TTL) {
@@ -48,9 +41,9 @@ function getStatus(cardId, memberId) {
   }
 
   return new Promise(resolve => {
-    RESOLVERS[cardId] = resolve
+    RESOLVERS.push(resolve)
     clearTimeout(DEBOUNCE)
-    DEBOUNCE = setTimeout(() => fetchBatch(memberId), 150)
+    DEBOUNCE = setTimeout(fetchBatch, 150)
   })
 }
 
@@ -58,9 +51,11 @@ function formatMinutes(seconds) {
   return Math.floor(seconds / 60) + ' min'
 }
 
-function invalidateCache(cardId) {
-  delete CACHE[cardId]
-  LAST_FETCH = 0
+function forceRefresh(t) {
+  return Promise.all([
+    t.set('board', 'shared', 'refresh', Math.random()),
+    t.set('card', 'shared', 'refresh', Math.random())
+  ])
 }
 
 TrelloPowerUp.initialize({
@@ -87,10 +82,7 @@ TrelloPowerUp.initialize({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memberId, cardId })
-              }).then(() => {
-                invalidateCache(cardId)
-                return t.set('board', 'shared', 'refresh', Math.random())
-              })
+              }).then(() => forceRefresh(t))
           }]
         }
 
@@ -102,10 +94,7 @@ TrelloPowerUp.initialize({
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ memberId, cardId, memberName })
-            }).then(() => {
-              invalidateCache(cardId)
-              return t.set('board', 'shared', 'refresh', Math.random())
-            })
+            }).then(() => forceRefresh(t))
         }]
       })
     })
@@ -122,7 +111,8 @@ TrelloPowerUp.initialize({
         if (!status) {
           return [{
             text: '--',
-            refresh: 30
+            color: 'light-gray',
+            refresh: 60
           }]
         }
 
@@ -133,7 +123,7 @@ TrelloPowerUp.initialize({
           const total = running + (status.totalPastSeconds || 0)
 
           return [{
-            text: formatMinutes(total),
+            text: '⏱️ ' + formatMinutes(total),
             color: 'green',
             refresh: 60
           }]
@@ -141,7 +131,7 @@ TrelloPowerUp.initialize({
 
         if (status.totalPastSeconds > 0) {
           return [{
-            text: formatMinutes(status.totalPastSeconds),
+            text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
             color: 'green',
             refresh: 60
           }]
@@ -149,6 +139,7 @@ TrelloPowerUp.initialize({
 
         return [{
           text: '--',
+          color: 'light-gray',
           refresh: 60
         }]
       })
