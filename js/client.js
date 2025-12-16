@@ -229,7 +229,7 @@ TrelloPowerUp.initialize({
                             .then(newStatus => {
                                 if (!newStatus.activeTimerData) {
                                     forceGlobalRefresh(t);
-                                    return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 1 };
+                                    return { title: "Tempo Total", text: 'Parando...', color: 'red', refresh: 10 };
                                 }
 
                                 var now = new Date();
@@ -241,7 +241,9 @@ TrelloPowerUp.initialize({
                                 var start = new Date(startTimeStr);
 
                                 var currentSession = Math.floor((now - start) / 1000);
-                                var total = currentSession + (newStatus.totalPastSeconds || 0);
+                                var totalSeconds = currentSession + (newStatus.totalPastSeconds || 0);
+                                
+                                var totalMinutes = Math.floor(totalSeconds / 60);
                             
                                 var stopCallback = function(t) {
                                     return callBackend('timer/stop', 'POST', {
@@ -260,9 +262,9 @@ TrelloPowerUp.initialize({
 
                                 return {
                                     title: "Tempo Total" + (newStatus.isRunningHere ? "" : ` (${newStatus.activeTimerData.memberName})`),
-                                    text: formatTime(total),
+                                    text: totalMinutes + ' min', 
                                     color: "green",
-                                    refresh: 1,
+                                    refresh: 60, 
                                     callback: stopCallback
                                 };
                             });
