@@ -104,7 +104,14 @@ TrelloPowerUp.initialize({
 
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId]
-        if (!status) return []
+
+        if (!status) {
+          return [{
+            text: '--',
+            color: 'light-gray',
+            refresh: 10
+          }]
+        }
 
         if (status.activeTimerData) {
           const start = new Date(status.activeTimerData.startTime)
@@ -114,6 +121,7 @@ TrelloPowerUp.initialize({
 
           return [{
             text: formatMinutes(total),
+            color: 'green',
             refresh: 60
           }]
         }
@@ -121,11 +129,16 @@ TrelloPowerUp.initialize({
         if (status.totalPastSeconds > 0) {
           return [{
             text: formatMinutes(status.totalPastSeconds),
+            color: 'green',
             refresh: 60
           }]
         }
 
-        return []
+        return [{
+          text: '--',
+          color: 'light-gray',
+          refresh: 60
+        }]
       })
     })
   }
