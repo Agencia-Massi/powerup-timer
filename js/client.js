@@ -23,16 +23,13 @@ function forceRefresh(t) {
 function fetchBatch() {
   const ids = Array.from(QUEUE)
   QUEUE.clear()
-
   if (!ids.length) return
 
   fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
-      ids.forEach(id => {
-        CACHE[id] = data[id] || null
-      })
+      ids.forEach(id => CACHE[id] = data[id] || null)
       RESOLVERS.forEach(r => r())
       RESOLVERS = []
     })
@@ -58,7 +55,6 @@ function getStatus(cardId, memberId) {
 }
 
 function formatMinutes(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
   return Math.floor(seconds / 60) + ' min'
 }
 
@@ -72,25 +68,13 @@ TrelloPowerUp.initialize({
     ]).then(([card, member, ctx]) => {
       const cardId = card.id
       const memberId = ctx.member
-      const memberName = member.fullName || 'Usuário'
-
-      const settingsButton = {
-        icon: `${ASSETS}/img/settings.svg`,
-        text: 'Configurar / Logs',
-        callback: () =>
-          t.modal({
-            title: 'Gestão de Tempo',
-            url: `${ASSETS}/dashboard/dashboard.html?cardId=${cardId}`,
-            height: 500
-          })
-      }
+      const memberName = member.fullName || member.username || 'Usuário'
 
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId] || {}
-        let timerButton
 
         if (status.isRunningHere) {
-          timerButton = {
+          return [{
             icon: `${ASSETS}/img/icon.svg`,
             text: 'Pausar',
             callback: () =>
@@ -98,22 +82,28 @@ TrelloPowerUp.initialize({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memberId, cardId })
-              }).then(() => forceRefresh(t))
-          }
-        } else {
-          timerButton = {
-            icon: `${ASSETS}/img/icon.svg`,
-            text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
-            callback: () =>
-              fetch(`${API}/timer/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ memberId, cardId, memberName })
-              }).then(() => forceRefresh(t))
-          }
+              }).then(() =>
+                forceRefresh(t).then(() =>
+                  t.alert({ message: '⏸️ Timer pausado', duration: 2, display: 'success' })
+                )
+              )
+          }]
         }
 
-        return [timerButton, settingsButton]
+        return [{
+          icon: `${ASSETS}/img/icon.svg`,
+          text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
+          callback: () =>
+            fetch(`${API}/timer/start`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ memberId, cardId, memberName })
+            }).then(() =>
+              forceRefresh(t).then(() =>
+                t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
+              )
+            )
+        }]
       })
     })
   },
@@ -125,18 +115,12 @@ TrelloPowerUp.initialize({
 
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId]
-
         if (!status) return []
 
-        if (status.activeTimerData && status.activeTimerData.startTime) {
-          let startStr = status.activeTimerData.startTime
-          if (!startStr.endsWith('Z')) startStr += 'Z'
-
-          const start = new Date(startStr)
+        if (status.activeTimerData) {
+          const start = new Date(status.activeTimerData.startTime)
           const now = new Date()
-          let running = Math.floor((now - start) / 1000)
-          if (!Number.isFinite(running) || running < 0) running = 0
-
+          const running = Math.floor((now - start) / 1000)
           const total = running + (status.totalPastSeconds || 0)
 
           return [{
