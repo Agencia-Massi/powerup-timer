@@ -68,6 +68,8 @@ async def check_timers_periodically():
                             }).execute()
 
                             supabase.table("active_timers").delete().eq("card_id", card_id).execute()
+                            
+                            supabase.table("card_settings").delete().eq("card_id", card_id).execute()
 
         except Exception as e:
             print(f"Error in background task: {e}")
