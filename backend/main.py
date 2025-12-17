@@ -30,6 +30,13 @@ class StopTimer(BaseModel):
     memberId: str
     cardId: str
 
+class UpdateLog(BaseModel):
+    duration: int
+
+class Settings(BaseModel):
+    cardId: str
+    timeLimit: str
+
 def now_utc():
     return datetime.now(timezone.utc)
 
@@ -70,7 +77,7 @@ def bulk_status(memberId: str, cardIds: str):
             total = past.get(cid, 0) + elapsed
 
             if total >= limit_seconds:
-                log = {
+                supabase.table("time_logs").insert({
                     "id": str(uuid.uuid4()),
                     "card_id": cid,
                     "member_id": timer["member_id"],
@@ -78,8 +85,8 @@ def bulk_status(memberId: str, cardIds: str):
                     "duration": elapsed,
                     "date": now_utc().isoformat(),
                     "action": "limit_stop"
-                }
-                supabase.table("time_logs").insert(log).execute()
+                }).execute()
+
                 supabase.table("active_timers").delete().eq("card_id", cid).execute()
                 timer = None
 
@@ -144,4 +151,32 @@ def stop_timer(body: StopTimer):
     }).execute()
 
     supabase.table("active_timers").delete().eq("card_id", body.cardId).eq("member_id", body.memberId).execute()
+    return {"ok": True}
+
+@app.get("/timer/logs/{card_id}")
+def get_logs(card_id: str):
+    logs = supabase.table("time_logs").select("*").eq("card_id", card_id).order("date").execute().data
+    settings = supabase.table("card_settings").select("*").eq("card_id", card_id).execute().data
+
+    return {
+        "logs": logs,
+        "timeLimit": settings[0]["time_limit"] if settings else ""
+    }
+
+@app.put("/timer/logs/{log_id}")
+def update_log(log_id: str, body: UpdateLog):
+    supabase.table("time_logs").update({"duration": body.duration}).eq("id", log_id).execute()
+    return {"ok": True}
+
+@app.delete("/timer/logs/{log_id}")
+def delete_log(log_id: str):
+    supabase.table("time_logs").delete().eq("id", log_id).execute()
+    return {"ok": True}
+
+@app.post("/timer/settings")
+def save_settings(body: Settings):
+    supabase.table("card_settings").upsert({
+        "card_id": body.cardId,
+        "time_limit": body.timeLimit
+    }).execute()
     return {"ok": True}
