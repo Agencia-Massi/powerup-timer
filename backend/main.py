@@ -70,28 +70,48 @@ def bulk_status(memberId: str, cardIds: str):
         running_here = current_user_timer and current_user_timer["card_id"] == cid
         running_other = current_user_timer and current_user_timer["card_id"] != cid
 
+        # --- A CORREÇÃO ESTÁ NESTE BLOCO ---
         if timer and settings_map.get(cid):
-            h, m = map(int, settings_map[cid].split(":"))
-            limit_seconds = h * 3600 + m * 60
-            elapsed = calculate_duration(timer["start_time"])
-            total = past.get(cid, 0) + elapsed
+            try:
+                # Divide pelo : e converte para lista de inteiros
+                time_parts = list(map(int, settings_map[cid].split(":")))
+                
+                # Se tiver 3 partes (H:M:S), usa as 3. Se tiver 2 (H:M), assume 0 segundos.
+                if len(time_parts) == 3:
+                    h, m, s = time_parts
+                elif len(time_parts) == 2:
+                    h, m = time_parts
+                    s = 0
+                else:
+                    h, m, s = 0, 0, 0 # Fallback de segurança
 
-            if total >= limit_seconds:
-                supabase.table("time_logs").insert({
-                    "id": str(uuid.uuid4()),
-                    "card_id": cid,
-                    "member_id": timer["member_id"],
-                    "member_name": timer["member_name"],
-                    "duration": elapsed,
-                    "date": now_utc().isoformat(),
-                    "action": "limit_stop"
-                }).execute()
+                limit_seconds = h * 3600 + m * 60 + s
+                elapsed = calculate_duration(timer["start_time"])
+                total = past.get(cid, 0) + elapsed
 
-                supabase.table("active_timers").delete().eq("card_id", cid).execute()
-                timer = None
+                if total >= limit_seconds:
+                    # Registra o log final
+                    supabase.table("time_logs").insert({
+                        "id": str(uuid.uuid4()),
+                        "card_id": cid,
+                        "member_id": timer["member_id"],
+                        "member_name": timer["member_name"],
+                        "duration": elapsed,
+                        "date": now_utc().isoformat(),
+                        "action": "limit_stop"
+                    }).execute()
+
+                    # Deleta o timer ativo
+                    supabase.table("active_timers").delete().eq("card_id", cid).execute()
+                    
+                    # Importante: Anula a variável timer para o Frontend saber que parou AGORA
+                    timer = None 
+            except Exception as e:
+                print(f"Erro ao verificar limite para o card {cid}: {e}")
+        # -----------------------------------
 
         response[cid] = {
-            "isRunningHere": bool(running_here),
+            "isRunningHere": bool(running_here) and (timer is not None), # Garante que se deletou acima, retorna falso
             "isOtherTimerRunning": bool(running_other),
             "activeTimerData": {
                 "memberId": timer["member_id"],
