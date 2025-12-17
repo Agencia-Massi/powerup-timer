@@ -1,7 +1,7 @@
 var Promise = TrelloPowerUp.Promise
 
-const API = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev'
-const BASE = 'https://miguelnsimoes.github.io/meu-trello-timer'
+const API = 'https://miguel-powerup-trello.jcceou.easypanel.host'
+const ASSETS = 'https://agencia-massi.github.io/powerup-timer'
 
 const CACHE = {}
 let LAST_FETCH = 0
@@ -23,13 +23,16 @@ function forceRefresh(t) {
 function fetchBatch() {
   const ids = Array.from(QUEUE)
   QUEUE.clear()
+
   if (!ids.length) return
 
   fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
-      ids.forEach(id => CACHE[id] = data[id] || null)
+      ids.forEach(id => {
+        CACHE[id] = data[id] || null
+      })
       RESOLVERS.forEach(r => r())
       RESOLVERS = []
     })
@@ -77,7 +80,7 @@ TrelloPowerUp.initialize({
 
         if (status.isRunningHere) {
           timerBtn = {
-            icon: `${BASE}/img/icon.svg`,
+            icon: `${ASSETS}/img/icon.svg`,
             text: 'Pausar',
             callback: () =>
               fetch(`${API}/timer/stop`, {
@@ -92,7 +95,7 @@ TrelloPowerUp.initialize({
           }
         } else {
           timerBtn = {
-            icon: `${BASE}/img/icon.svg`,
+            icon: `${ASSETS}/img/icon.svg`,
             text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
             callback: () =>
               fetch(`${API}/timer/start`, {
@@ -108,12 +111,13 @@ TrelloPowerUp.initialize({
         }
 
         const settingsBtn = {
-          icon: `${BASE}/img/settings.svg`,
+          icon: `${ASSETS}/img/settings.svg`,
           text: 'Configurar / Logs',
           callback: () =>
             t.modal({
-              title: 'Gestão do Tempo',
-              url: `${BASE}/dashboard/dashboard.html?cardId=${cardId}`,
+              title: 'Gestão de Tempo',
+              url: `${ASSETS}/dashboard/dashboard.html?cardId=${cardId}`,
+              accentColor: '#0079BF',
               height: 500,
               fullscreen: false
             })
@@ -126,31 +130,39 @@ TrelloPowerUp.initialize({
 
   'card-badges': function (t) {
     return t.card('id').then(card => {
-      const status = CACHE[card.id]
-      if (!status) return []
+      const cardId = card.id
+      const memberId = t.getContext().member
 
-      if (status.activeTimerData) {
-        let start = status.activeTimerData.startTime
-        if (!start.endsWith('Z')) start += 'Z'
-        const running = Math.floor((Date.now() - new Date(start)) / 1000)
-        const total = running + (status.totalPastSeconds || 0)
+      return getStatus(cardId, memberId).then(() => {
+        const status = CACHE[cardId]
 
-        return [{
-          text: '⏱️ ' + formatMinutes(total),
-          color: 'green',
-          refresh: 60
-        }]
-      }
+        if (!status) return []
 
-      if (status.totalPastSeconds > 0) {
-        return [{
-          text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
-          color: 'light-gray',
-          refresh: 60
-        }]
-      }
+        if (status.activeTimerData) {
+          let startStr = status.activeTimerData.startTime
+          if (!startStr.endsWith('Z')) startStr += 'Z'
+          const start = new Date(startStr)
+          const now = new Date()
+          const running = Math.floor((now - start) / 1000)
+          const total = running + (status.totalPastSeconds || 0)
 
-      return []
+          return [{
+            text: '⏱️ ' + formatMinutes(total),
+            color: 'green',
+            refresh: 60
+          }]
+        }
+
+        if (status.totalPastSeconds > 0) {
+          return [{
+            text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
+            color: 'light-gray',
+            refresh: 60
+          }]
+        }
+
+        return []
+      })
     })
   }
 
