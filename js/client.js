@@ -30,11 +30,9 @@ function fetchBatch() {
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
-
       ids.forEach(id => {
         CACHE[id] = data[id] || null
       })
-
       RESOLVERS.forEach(r => r())
       RESOLVERS = []
     })
@@ -65,6 +63,21 @@ function formatMinutes(seconds) {
 
 TrelloPowerUp.initialize({
 
+  'board-buttons': function (t, opts) {
+    return [{
+      icon: `${ASSETS}/img/icon.svg`,
+      text: 'Timer Dashboard',
+      callback: function(t) {
+        return t.popup({
+          title: 'Configurações do Timer',
+          url: './dashboard/dashboard.html', 
+          height: 250
+        });
+      }
+    }];
+  },
+
+
   'card-buttons': function (t) {
     return Promise.all([
       t.card('id'),
@@ -75,11 +88,24 @@ TrelloPowerUp.initialize({
       const memberId = ctx.member
       const memberName = member.fullName || 'Usuário'
 
+      const settingsButton = {
+        icon: `${ASSETS}/img/icon.svg`, 
+        text: 'Configurar Limite',
+        callback: function(t) {
+            return t.popup({ 
+                title: 'Configurar Limite',
+                url: './dashboard/dashboard.html',
+                height: 250
+            });
+        }
+      };
+
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId] || {}
+        let timerButton;
 
         if (status.isRunningHere) {
-          return [{
+          timerButton = {
             icon: `${ASSETS}/img/icon.svg`,
             text: 'Pausar',
             callback: () =>
@@ -92,23 +118,25 @@ TrelloPowerUp.initialize({
                   t.alert({ message: '⏸️ Timer pausado', duration: 2, display: 'success' })
                 )
               )
-          }]
+          };
+        } else {
+          timerButton = {
+            icon: `${ASSETS}/img/icon.svg`,
+            text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
+            callback: () =>
+              fetch(`${API}/timer/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memberId, cardId, memberName })
+              }).then(() =>
+                forceRefresh(t).then(() =>
+                  t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
+                )
+              )
+          };
         }
 
-        return [{
-          icon: `${ASSETS}/img/icon.svg`,
-          text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
-          callback: () =>
-            fetch(`${API}/timer/start`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ memberId, cardId, memberName })
-            }).then(() =>
-              forceRefresh(t).then(() =>
-                t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
-              )
-            )
-        }]
+        return [timerButton, settingsButton];
       })
     })
   },
@@ -150,5 +178,4 @@ TrelloPowerUp.initialize({
       })
     })
   }
-
 })
