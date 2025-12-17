@@ -1,136 +1,83 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import os
 import asyncio
 from contextlib import asynccontextmanager
 from supabase import create_client, Client
 
-# --- CONFIGURAÇÃO SUPABASE ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("CRITICAL: Supabase keys not found!")
     raise Exception("Supabase credentials not found.")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- FUNÇÕES AUXILIARES DE TEMPO ---
 def now_utc():
     return datetime.now(timezone.utc)
 
+def now_brazil():
+    return datetime.now(timezone.utc) - timedelta(hours=3)
+
 def calculate_duration(start_iso):
-    """Calcula a diferença em segundos entre AGORA e o START_TIME"""
     try:
-        # Tenta lidar com o Z ou +00:00
         if start_iso.endswith('Z'):
             start_iso = start_iso.replace('Z', '+00:00')
-        
         start = datetime.fromisoformat(start_iso)
-        
-        # Garante que 'start' tenha timezone
         if start.tzinfo is None:
             start = start.replace(tzinfo=timezone.utc)
-            
         now = now_utc()
         diff = (now - start).total_seconds()
-        
-        # Debug visual para entender se o cálculo está certo
-        # print(f"DEBUG TIME: Start={start} | Now={now} | Diff={diff}")
-        
         return int(diff) if diff > 0 else 0
-    except Exception as e:
-        print(f"ERRO CALCULO TEMPO: {e}")
+    except Exception:
         return 0
 
-def parse_limit_to_seconds(limit_str):
-    if not limit_str: return None
-    try:
-        parts = list(map(int, limit_str.split(":")))
-        sec = 0
-        if len(parts) == 3: # HH:MM:SS
-            sec = parts[0] * 3600 + parts[1] * 60 + parts[2]
-        elif len(parts) == 2: # HH:MM
-            sec = parts[0] * 3600 + parts[1] * 60
-        return sec
-    except:
-        return None
-
-# --- TAREFA EM SEGUNDO PLANO (LOOP INFINITO) ---
 async def check_timers_periodically():
-    print("--- INICIANDO VERIFICAÇÃO EM BACKGROUND ---")
     while True:
         try:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Checando timers...")
+            current_time_br = now_brazil().strftime("%H:%M")
             
-            # 1. Pega timers ativos
             active_response = supabase.table("active_timers").select("*").execute()
             active_timers = active_response.data
 
-            if not active_timers:
-                print("   > Nenhum timer rodando.")
-            
-            else:
+            if active_timers:
                 active_card_ids = [t["card_id"] for t in active_timers]
                 
-                # 2. Pega limites
                 settings_response = supabase.table("card_settings").select("*").in_("card_id", active_card_ids).execute()
                 settings_map = {s["card_id"]: s["time_limit"] for s in settings_response.data}
-                
-                # 3. Pega logs passados
-                logs_response = supabase.table("time_logs").select("card_id,duration").in_("card_id", active_card_ids).execute()
-                past_duration_map = {}
-                for log in logs_response.data:
-                    past_duration_map[log["card_id"]] = past_duration_map.get(log["card_id"], 0) + log["duration"]
 
-                # 4. Verifica cada um
                 for timer in active_timers:
                     card_id = timer["card_id"]
-                    member_name = timer["member_name"]
-                    limit_str = settings_map.get(card_id)
+                    limit_time_str = settings_map.get(card_id)
                     
-                    current_session = calculate_duration(timer["start_time"])
-                    total_past = past_duration_map.get(card_id, 0)
-                    total_time = total_past + current_session
-                    
-                    limit_seconds = parse_limit_to_seconds(limit_str) if limit_str else 0
-                    
-                    print(f"   > Card {card_id[-4:]} ({member_name}): Total={total_time}s / Limite={limit_seconds}s")
+                    if limit_time_str:
+                        if current_time_br >= limit_time_str:
+                            duration = calculate_duration(timer["start_time"])
 
-                    if limit_seconds > 0 and total_time >= limit_seconds:
-                        print(f"   >>> LIMITE ATINGIDO! PARANDO TIMER DE {member_name} <<<")
-                        
-                        # Salva Log
-                        supabase.table("time_logs").insert({
-                            "id": str(uuid.uuid4()),
-                            "card_id": card_id,
-                            "member_id": timer["member_id"],
-                            "member_name": timer["member_name"],
-                            "duration": current_session,
-                            "date": now_utc().isoformat(),
-                            "action": "auto_stop_limit"
-                        }).execute()
+                            supabase.table("time_logs").insert({
+                                "id": str(uuid.uuid4()),
+                                "card_id": card_id,
+                                "member_id": timer["member_id"],
+                                "member_name": timer["member_name"],
+                                "duration": duration,
+                                "date": now_utc().isoformat(),
+                                "action": "auto_stop_deadline"
+                            }).execute()
 
-                        # Remove Ativo
-                        supabase.table("active_timers").delete().eq("card_id", card_id).execute()
-                        print("   >>> TIMER REMOVIDO COM SUCESSO")
+                            supabase.table("active_timers").delete().eq("card_id", card_id).execute()
 
         except Exception as e:
-            print(f"!!! ERRO CRÍTICO NO LOOP: {e}")
+            print(f"Error in background task: {e}")
 
-        # Espera apenas 10 segundos para testar
         await asyncio.sleep(10)
 
-# --- LIFESPAN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("--- SERVER STARTING: STARTING BACKGROUND TASKS ---")
     task = asyncio.create_task(check_timers_periodically())
     yield
-    print("--- SERVER STOPPING: CANCELLING TASKS ---")
     task.cancel()
 
 app = FastAPI(lifespan=lifespan)
@@ -143,7 +90,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- MODELS E ROTAS PADRÃO (MANTENHA IGUAL) ---
 class StartTimer(BaseModel):
     memberId: str
     cardId: str
@@ -162,10 +108,7 @@ class Settings(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"status": "Server is running", "time": now_utc()}
-
-# ... (Mantenha as outras rotas: bulk_status, start, stop, logs, settings, etc. iguais ao anterior) ...
-# ... Vou colocar apenas as rotas principais abaixo para garantir que funcionem ...
+    return {"status": "Server running", "brazil_time": now_brazil().isoformat()}
 
 @app.get("/timer/status/bulk")
 def bulk_status(memberId: str, cardIds: str):
@@ -176,7 +119,6 @@ def bulk_status(memberId: str, cardIds: str):
     user_timer = supabase.table("active_timers").select("*").eq("member_id", memberId).execute().data
 
     active_map = {a["card_id"]: a for a in active}
-    settings_map = {s["card_id"]: s["time_limit"] for s in settings}
     past = {}
 
     for log in logs:
