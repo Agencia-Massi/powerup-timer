@@ -70,16 +70,18 @@ TrelloPowerUp.initialize({
       const memberId = ctx.member
       const memberName = member.fullName || member.username || 'Usuário'
 
-      // 1. CRIAMOS O BOTÃO DE CONFIGURAÇÃO AQUI
+      // 1. BOTÃO DE CONFIGURAÇÃO (Agora usando MODAL para ficar grande)
       const settingsButton = {
-        icon: `${ASSETS}/img/icon.svg`, // Ou use um ícone de engrenagem se tiver
-        text: 'Configurar / Logs',
+        icon: `${ASSETS}/img/settings.svg`, // Tentei usar um icone de settings se tiver, ou use o padrao
+        text: 'Configurar Tempo',
         callback: function(t) {
-          return t.popup({
-            title: 'Gestão de Tempo',
-            // Passamos o cardId na URL para o dashboard saber qual card carregar
+          // AQUI ESTAVA A DIFERENÇA: t.popup vs t.modal
+          return t.modal({
+            title: 'Gestão de Tempo e Logs',
             url: `./dashboard/dashboard.html?cardId=${cardId}`,
-            height: 300 
+            accentColor: '#0079BF', // Cor do topo da janela (Azul Trello)
+            height: 500, // Altura maior
+            fullscreen: false // Coloque true se quiser que ocupe a tela toda
           });
         }
       };
@@ -88,11 +90,11 @@ TrelloPowerUp.initialize({
         const status = CACHE[cardId] || {}
         let timerButton = null;
 
-        // 2. DEFINIMOS O BOTÃO DO TIMER (PAUSAR ou INICIAR)
+        // 2. BOTÃO DO TIMER
         if (status.isRunningHere) {
           timerButton = {
             icon: `${ASSETS}/img/icon.svg`,
-            text: 'Pausar',
+            text: 'Pausar Timer',
             callback: () =>
               fetch(`${API}/timer/stop`, {
                 method: 'POST',
@@ -107,7 +109,7 @@ TrelloPowerUp.initialize({
         } else {
           timerButton = {
             icon: `${ASSETS}/img/icon.svg`,
-            text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
+            text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar Timer',
             callback: () =>
               fetch(`${API}/timer/start`, {
                 method: 'POST',
@@ -121,7 +123,7 @@ TrelloPowerUp.initialize({
           };
         }
 
-        // 3. RETORNAMOS OS DOIS BOTÕES JUNTOS
+        // RETORNA OS DOIS BOTÕES
         return [timerButton, settingsButton];
       })
     })
