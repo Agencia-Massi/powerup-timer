@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from datetime import datetime, timezone
+from datetime import datetime
 import uuid
 import os
 import requests
@@ -42,15 +42,12 @@ class Settings(BaseModel):
     cardId: str
     timeLimit: str
 
-def now_utc():
-    return datetime.now(timezone.utc)
-
 def now_utc_iso():
-    return now_utc().isoformat()
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 def calculate_duration(start_iso):
-    start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-    diff = (now_utc() - start).total_seconds()
+    start = datetime.fromisoformat(start_iso.replace("Z", ""))
+    diff = (datetime.utcnow() - start).total_seconds()
     return int(diff) if diff > 0 else 0
 
 def parse_time_limit(limit_str):
