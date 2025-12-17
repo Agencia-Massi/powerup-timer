@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import os
 import requests
@@ -42,26 +42,21 @@ class Settings(BaseModel):
     cardId: str
     timeLimit: str
 
-def now_utc_iso():
-    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+def now_utc():
+    return datetime.now(timezone.utc)
+
+def now_iso():
+    return now_utc().isoformat().replace("+00:00", "Z")
+
+def parse_iso(date_str):
+    if date_str.endswith("Z"):
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    return datetime.fromisoformat(date_str).astimezone(timezone.utc)
 
 def calculate_duration(start_iso):
-    start = datetime.fromisoformat(start_iso.replace("Z", ""))
-    diff = (datetime.utcnow() - start).total_seconds()
+    start = parse_iso(start_iso)
+    diff = (now_utc() - start).total_seconds()
     return int(diff) if diff > 0 else 0
-
-def parse_time_limit(limit_str):
-    if not limit_str:
-        return None
-    try:
-        parts = [int(p) for p in limit_str.split(":")]
-        if len(parts) == 3:
-            return parts[0] * 3600 + parts[1] * 60 + parts[2]
-        if len(parts) == 2:
-            return parts[0] * 3600 + parts[1] * 60
-    except:
-        return None
-    return None
 
 def send_to_n8n(payload):
     if not N8N_WEBHOOK_URL:
@@ -77,21 +72,18 @@ def bulk_status(memberId: str, cardIds: str):
 
     active = supabase.table("active_timers").select("*").in_("card_id", ids).execute().data
     logs = supabase.table("time_logs").select("card_id,duration").in_("card_id", ids).execute().data
-    settings = supabase.table("card_settings").select("*").in_("card_id", ids).execute().data
     user_timer = supabase.table("active_timers").select("*").eq("member_id", memberId).execute().data
 
     active_map = {a["card_id"]: a for a in active}
-    settings_map = {s["card_id"]: s.get("time_limit") for s in settings}
-
     past = {}
+
     for log in logs:
-        past[log["card_id"]] = past.get(log["card_id"], 0) + log["duration"]
+        past[log["card_id"]] = past.get(log["card_id"], 0) + int(log["duration"] or 0)
 
     current_user_timer = user_timer[0] if user_timer else None
     response = {}
 
     for cid in ids:
-        timer = active_map.get(cid)
         running_here = False
         running_other = False
 
@@ -101,27 +93,7 @@ def bulk_status(memberId: str, cardIds: str):
             else:
                 running_other = True
 
-        if timer:
-            elapsed = calculate_duration(timer["start_time"])
-            total = elapsed + past.get(cid, 0)
-            limit_seconds = parse_time_limit(settings_map.get(cid))
-
-            if limit_seconds and total >= limit_seconds:
-                log = {
-                    "id": str(uuid.uuid4()),
-                    "card_id": cid,
-                    "member_id": timer["member_id"],
-                    "member_name": timer["member_name"],
-                    "duration": elapsed,
-                    "date": now_utc_iso(),
-                    "action": "auto_stop_limit"
-                }
-                supabase.table("time_logs").insert(log).execute()
-                supabase.table("active_timers").delete().eq("card_id", cid).execute()
-                send_to_n8n(log)
-                timer = None
-                running_here = False
-                running_other = False
+        timer = active_map.get(cid)
 
         response[cid] = {
             "isRunningHere": running_here,
@@ -138,12 +110,13 @@ def bulk_status(memberId: str, cardIds: str):
 
 @app.post("/timer/start")
 def start_timer(body: StartTimer):
-    now = now_utc_iso()
+    now = now_iso()
 
     previous = supabase.table("active_timers").select("*").eq("member_id", body.memberId).execute().data
     if previous:
         prev = previous[0]
         duration = calculate_duration(prev["start_time"])
+
         log = {
             "id": str(uuid.uuid4()),
             "card_id": prev["card_id"],
@@ -153,6 +126,7 @@ def start_timer(body: StartTimer):
             "date": now,
             "action": "auto_stop"
         }
+
         supabase.table("time_logs").insert(log).execute()
         supabase.table("active_timers").delete().eq("member_id", body.memberId).execute()
         send_to_n8n(log)
@@ -168,7 +142,12 @@ def start_timer(body: StartTimer):
 
 @app.post("/timer/stop")
 def stop_timer(body: StopTimer):
-    active = supabase.table("active_timers").select("*").eq("card_id", body.cardId).eq("member_id", body.memberId).execute().data
+    active = supabase.table("active_timers") \
+        .select("*") \
+        .eq("card_id", body.cardId) \
+        .eq("member_id", body.memberId) \
+        .execute().data
+
     if not active:
         raise HTTPException(status_code=400)
 
@@ -181,12 +160,17 @@ def stop_timer(body: StopTimer):
         "member_id": body.memberId,
         "member_name": timer["member_name"],
         "duration": duration,
-        "date": now_utc_iso(),
+        "date": now_iso(),
         "action": "manual_stop"
     }
 
     supabase.table("time_logs").insert(log).execute()
-    supabase.table("active_timers").delete().eq("card_id", body.cardId).eq("member_id", body.memberId).execute()
+    supabase.table("active_timers") \
+        .delete() \
+        .eq("card_id", body.cardId) \
+        .eq("member_id", body.memberId) \
+        .execute()
+
     send_to_n8n(log)
 
     return {"newTotalSeconds": duration}
@@ -196,24 +180,26 @@ def logs(card_id: str):
     res_logs = supabase.table("time_logs").select("*").eq("card_id", card_id).execute()
     res_settings = supabase.table("card_settings").select("*").eq("card_id", card_id).execute()
 
+    formatted = []
+
+    for log in res_logs.data:
+        formatted.append({
+            "id": str(log["id"]),
+            "memberName": log["member_name"],
+            "duration": int(log["duration"] or 0),
+            "date": log["date"]
+        })
+
     return {
-        "logs": [
-            {
-                "id": str(l["id"]),
-                "cardId": l["card_id"],
-                "memberId": l["member_id"],
-                "memberName": l["member_name"],
-                "duration": l["duration"],
-                "date": l["date"],
-                "action": l.get("action")
-            } for l in res_logs.data
-        ],
+        "logs": formatted,
         "timeLimit": res_settings.data[0]["time_limit"] if res_settings.data else ""
     }
 
 @app.put("/timer/logs/{log_id}")
 def update_log(log_id: str, body: UpdateLog):
-    supabase.table("time_logs").update({"duration": body.duration}).eq("id", log_id).execute()
+    supabase.table("time_logs").update({
+        "duration": int(body.duration)
+    }).eq("id", log_id).execute()
     return {"ok": True}
 
 @app.delete("/timer/logs/{log_id}")
