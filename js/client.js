@@ -1,7 +1,7 @@
 var Promise = TrelloPowerUp.Promise
 
-const API = 'https://miguel-powerup-trello.jcceou.easypanel.host'
-const ASSETS = 'https://agencia-massi.github.io/powerup-timer'
+const API = 'https://pseudomythically-aeroscopic-darwin.ngrok-free.dev'
+const BASE = 'https://miguelnsimoes.github.io/meu-trello-timer'
 
 const CACHE = {}
 let LAST_FETCH = 0
@@ -23,16 +23,13 @@ function forceRefresh(t) {
 function fetchBatch() {
   const ids = Array.from(QUEUE)
   QUEUE.clear()
-
   if (!ids.length) return
 
   fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
-      ids.forEach(id => {
-        CACHE[id] = data[id] || null
-      })
+      ids.forEach(id => CACHE[id] = data[id] || null)
       RESOLVERS.forEach(r => r())
       RESOLVERS = []
     })
@@ -58,25 +55,11 @@ function getStatus(cardId, memberId) {
 }
 
 function formatMinutes(seconds) {
+  if (seconds < 0) seconds = 0
   return Math.floor(seconds / 60) + ' min'
 }
 
 TrelloPowerUp.initialize({
-
-  'board-buttons': function (t, opts) {
-    return [{
-      icon: `${ASSETS}/img/icon.svg`,
-      text: 'Timer Dashboard',
-      callback: function(t) {
-        return t.popup({
-          title: 'Configurações do Timer',
-          url: './dashboard/dashboard.html', 
-          height: 250
-        });
-      }
-    }];
-  },
-
 
   'card-buttons': function (t) {
     return Promise.all([
@@ -88,25 +71,13 @@ TrelloPowerUp.initialize({
       const memberId = ctx.member
       const memberName = member.fullName || 'Usuário'
 
-      const settingsButton = {
-        icon: `${ASSETS}/img/icon.svg`, 
-        text: 'Configurar Limite',
-        callback: function(t) {
-            return t.popup({ 
-                title: 'Configurar Limite',
-                url: './dashboard/dashboard.html',
-                height: 250
-            });
-        }
-      };
-
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId] || {}
-        let timerButton;
+        let timerBtn
 
         if (status.isRunningHere) {
-          timerButton = {
-            icon: `${ASSETS}/img/icon.svg`,
+          timerBtn = {
+            icon: `${BASE}/img/icon.svg`,
             text: 'Pausar',
             callback: () =>
               fetch(`${API}/timer/stop`, {
@@ -118,10 +89,10 @@ TrelloPowerUp.initialize({
                   t.alert({ message: '⏸️ Timer pausado', duration: 2, display: 'success' })
                 )
               )
-          };
+          }
         } else {
-          timerButton = {
-            icon: `${ASSETS}/img/icon.svg`,
+          timerBtn = {
+            icon: `${BASE}/img/icon.svg`,
             text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
             callback: () =>
               fetch(`${API}/timer/start`, {
@@ -133,49 +104,54 @@ TrelloPowerUp.initialize({
                   t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
                 )
               )
-          };
+          }
         }
 
-        return [timerButton, settingsButton];
+        const settingsBtn = {
+          icon: `${BASE}/img/settings.svg`,
+          text: 'Configurar / Logs',
+          callback: () =>
+            t.modal({
+              title: 'Gestão do Tempo',
+              url: `${BASE}/dashboard/dashboard.html?cardId=${cardId}`,
+              height: 500,
+              fullscreen: false
+            })
+        }
+
+        return [timerBtn, settingsBtn]
       })
     })
   },
 
   'card-badges': function (t) {
     return t.card('id').then(card => {
-      const cardId = card.id
-      const memberId = t.getContext().member
+      const status = CACHE[card.id]
+      if (!status) return []
 
-      return getStatus(cardId, memberId).then(() => {
-        const status = CACHE[cardId]
+      if (status.activeTimerData) {
+        let start = status.activeTimerData.startTime
+        if (!start.endsWith('Z')) start += 'Z'
+        const running = Math.floor((Date.now() - new Date(start)) / 1000)
+        const total = running + (status.totalPastSeconds || 0)
 
-        if (!status) {
-          return []
-        }
+        return [{
+          text: '⏱️ ' + formatMinutes(total),
+          color: 'green',
+          refresh: 60
+        }]
+      }
 
-        if (status.activeTimerData) {
-          const start = new Date(status.activeTimerData.startTime)
-          const now = new Date()
-          const running = Math.floor((now - start) / 1000)
-          const total = running + (status.totalPastSeconds || 0)
+      if (status.totalPastSeconds > 0) {
+        return [{
+          text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
+          color: 'light-gray',
+          refresh: 60
+        }]
+      }
 
-          return [{
-            text: '⏱️ ' + formatMinutes(total),
-            color: 'green',
-            refresh: 60
-          }]
-        }
-
-        if (status.totalPastSeconds > 0) {
-          return [{
-            text: '⏸️ ' + formatMinutes(status.totalPastSeconds),
-            color: 'light-gray',
-            refresh: 60
-          }]
-        }
-
-        return []
-      })
+      return []
     })
   }
+
 })
