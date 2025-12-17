@@ -58,7 +58,7 @@ function getStatus(cardId, memberId) {
 }
 
 function formatMinutes(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0 min'
+  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0
   return Math.floor(seconds / 60) + ' min'
 }
 
@@ -74,11 +74,23 @@ TrelloPowerUp.initialize({
       const memberId = ctx.member
       const memberName = member.fullName || 'Usuário'
 
+      const settingsButton = {
+        icon: `${ASSETS}/img/settings.svg`,
+        text: 'Configurar / Logs',
+        callback: () =>
+          t.modal({
+            title: 'Gestão de Tempo',
+            url: `${ASSETS}/dashboard/dashboard.html?cardId=${cardId}`,
+            height: 500
+          })
+      }
+
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId] || {}
+        let timerButton
 
         if (status.isRunningHere) {
-          return [{
+          timerButton = {
             icon: `${ASSETS}/img/icon.svg`,
             text: 'Pausar',
             callback: () =>
@@ -86,28 +98,22 @@ TrelloPowerUp.initialize({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memberId, cardId })
-              }).then(() =>
-                forceRefresh(t).then(() =>
-                  t.alert({ message: '⏸️ Timer pausado', duration: 2, display: 'success' })
-                )
-              )
-          }]
+              }).then(() => forceRefresh(t))
+          }
+        } else {
+          timerButton = {
+            icon: `${ASSETS}/img/icon.svg`,
+            text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
+            callback: () =>
+              fetch(`${API}/timer/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memberId, cardId, memberName })
+              }).then(() => forceRefresh(t))
+          }
         }
 
-        return [{
-          icon: `${ASSETS}/img/icon.svg`,
-          text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
-          callback: () =>
-            fetch(`${API}/timer/start`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ memberId, cardId, memberName })
-            }).then(() =>
-              forceRefresh(t).then(() =>
-                t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
-              )
-            )
-        }]
+        return [timerButton, settingsButton]
       })
     })
   },
@@ -119,17 +125,19 @@ TrelloPowerUp.initialize({
 
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId]
+
         if (!status) return []
 
-        if (
-          status.activeTimerData &&
-          status.activeTimerData.startTime &&
-          !isNaN(new Date(status.activeTimerData.startTime).getTime())
-        ) {
-          const start = new Date(status.activeTimerData.startTime)
+        if (status.activeTimerData && status.activeTimerData.startTime) {
+          let startStr = status.activeTimerData.startTime
+          if (!startStr.endsWith('Z')) startStr += 'Z'
+
+          const start = new Date(startStr)
           const now = new Date()
-          const running = Math.floor((now - start) / 1000)
-          const total = Math.max(0, running + (status.totalPastSeconds || 0))
+          let running = Math.floor((now - start) / 1000)
+          if (!Number.isFinite(running) || running < 0) running = 0
+
+          const total = running + (status.totalPastSeconds || 0)
 
           return [{
             text: '⏱️ ' + formatMinutes(total),
