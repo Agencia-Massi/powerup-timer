@@ -70,11 +70,27 @@ TrelloPowerUp.initialize({
       const memberId = ctx.member
       const memberName = member.fullName || member.username || 'Usuário'
 
+      // 1. CRIAMOS O BOTÃO DE CONFIGURAÇÃO AQUI
+      const settingsButton = {
+        icon: `${ASSETS}/img/icon.svg`, // Ou use um ícone de engrenagem se tiver
+        text: 'Configurar / Logs',
+        callback: function(t) {
+          return t.popup({
+            title: 'Gestão de Tempo',
+            // Passamos o cardId na URL para o dashboard saber qual card carregar
+            url: `./dashboard/dashboard.html?cardId=${cardId}`,
+            height: 300 
+          });
+        }
+      };
+
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId] || {}
+        let timerButton = null;
 
+        // 2. DEFINIMOS O BOTÃO DO TIMER (PAUSAR ou INICIAR)
         if (status.isRunningHere) {
-          return [{
+          timerButton = {
             icon: `${ASSETS}/img/icon.svg`,
             text: 'Pausar',
             callback: () =>
@@ -87,23 +103,26 @@ TrelloPowerUp.initialize({
                   t.alert({ message: '⏸️ Timer pausado', duration: 2, display: 'success' })
                 )
               )
-          }]
+          };
+        } else {
+          timerButton = {
+            icon: `${ASSETS}/img/icon.svg`,
+            text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
+            callback: () =>
+              fetch(`${API}/timer/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memberId, cardId, memberName })
+              }).then(() =>
+                forceRefresh(t).then(() =>
+                  t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
+                )
+              )
+          };
         }
 
-        return [{
-          icon: `${ASSETS}/img/icon.svg`,
-          text: status.isOtherTimerRunning ? 'Iniciar (pausa outro)' : 'Iniciar',
-          callback: () =>
-            fetch(`${API}/timer/start`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ memberId, cardId, memberName })
-            }).then(() =>
-              forceRefresh(t).then(() =>
-                t.alert({ message: '⏱️ Timer iniciado', duration: 2, display: 'info' })
-              )
-            )
-        }]
+        // 3. RETORNAMOS OS DOIS BOTÕES JUNTOS
+        return [timerButton, settingsButton];
       })
     })
   },
