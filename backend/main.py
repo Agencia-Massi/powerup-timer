@@ -4,14 +4,114 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 import uuid
 import os
+import asyncio
+from contextlib import asynccontextmanager
 from supabase import create_client, Client
 
+# --- CONFIGURAÇÃO SUPABASE ---
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise Exception("Supabase credentials not found in environment variables.")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-app = FastAPI()
+# --- FUNÇÕES AUXILIARES ---
+def now_utc():
+    return datetime.now(timezone.utc)
+
+def calculate_duration(start_iso):
+    try:
+        # Corrige formato ISO se necessário
+        start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+        now = now_utc()
+        diff = (now - start).total_seconds()
+        return int(diff) if diff > 0 else 0
+    except Exception:
+        return 0
+
+def parse_limit_to_seconds(limit_str):
+    """Converte 'HH:MM' ou 'HH:MM:SS' para segundos totais"""
+    if not limit_str:
+        return None
+    try:
+        parts = list(map(int, limit_str.split(":")))
+        if len(parts) == 3: # HH:MM:SS
+            return parts[0] * 3600 + parts[1] * 60 + parts[2]
+        elif len(parts) == 2: # HH:MM
+            return parts[0] * 3600 + parts[1] * 60
+        return None
+    except:
+        return None
+
+# --- TAREFA EM SEGUNDO PLANO (A "MÁGICA" DO CÓDIGO ANTIGO) ---
+async def check_timers_periodically():
+    while True:
+        try:
+            # 1. Pega todos os timers ativos
+            active_response = supabase.table("active_timers").select("*").execute()
+            active_timers = active_response.data
+
+            if active_timers:
+                # 2. Pega as configurações apenas dos cards que estão rodando
+                active_card_ids = [t["card_id"] for t in active_timers]
+                settings_response = supabase.table("card_settings").select("*").in_("card_id", active_card_ids).execute()
+                settings_map = {s["card_id"]: s["time_limit"] for s in settings_response.data}
+                
+                # 3. Pega logs passados para somar o tempo total
+                logs_response = supabase.table("time_logs").select("card_id,duration").in_("card_id", active_card_ids).execute()
+                past_duration_map = {}
+                for log in logs_response.data:
+                    past_duration_map[log["card_id"]] = past_duration_map.get(log["card_id"], 0) + log["duration"]
+
+                # 4. Verifica cada timer
+                for timer in active_timers:
+                    card_id = timer["card_id"]
+                    limit_str = settings_map.get(card_id)
+                    
+                    if limit_str:
+                        limit_seconds = parse_limit_to_seconds(limit_str)
+                        
+                        if limit_seconds:
+                            current_session = calculate_duration(timer["start_time"])
+                            total_time = past_duration_map.get(card_id, 0) + current_session
+
+                            # SE ESTOUROU O TEMPO
+                            if total_time >= limit_seconds:
+                                print(f"🛑 Auto-stopping Timer for Card {card_id}")
+                                
+                                # Salva o Log
+                                supabase.table("time_logs").insert({
+                                    "id": str(uuid.uuid4()),
+                                    "card_id": card_id,
+                                    "member_id": timer["member_id"],
+                                    "member_name": timer["member_name"],
+                                    "duration": current_session,
+                                    "date": now_utc().isoformat(),
+                                    "action": "auto_stop_limit"
+                                }).execute()
+
+                                # Remove dos Ativos
+                                supabase.table("active_timers").delete().eq("card_id", card_id).execute()
+
+        except Exception as e:
+            print(f"Erro no check periódico: {e}")
+
+        # Espera 60 segundos antes de checar de novo
+        await asyncio.sleep(60)
+
+# --- LIFESPAN (INICIA O LOOP QUANDO O SERVIDOR LIGA) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Inicia a tarefa em background
+    task = asyncio.create_task(check_timers_periodically())
+    yield
+    # Cancela quando o servidor desliga
+    task.cancel()
+
+# --- APP FASTAPI ---
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +121,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- MODELOS ---
 class StartTimer(BaseModel):
     memberId: str
     cardId: str
@@ -37,14 +138,7 @@ class Settings(BaseModel):
     cardId: str
     timeLimit: str
 
-def now_utc():
-    return datetime.now(timezone.utc)
-
-def calculate_duration(start_iso):
-    start = datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
-    now = now_utc()
-    diff = (now - start).total_seconds()
-    return int(diff) if diff > 0 else 0
+# --- ROTAS ---
 
 @app.get("/timer/status/bulk")
 def bulk_status(memberId: str, cardIds: str):
@@ -69,49 +163,11 @@ def bulk_status(memberId: str, cardIds: str):
         timer = active_map.get(cid)
         running_here = current_user_timer and current_user_timer["card_id"] == cid
         running_other = current_user_timer and current_user_timer["card_id"] != cid
-
-        # --- A CORREÇÃO ESTÁ NESTE BLOCO ---
-        if timer and settings_map.get(cid):
-            try:
-                # Divide pelo : e converte para lista de inteiros
-                time_parts = list(map(int, settings_map[cid].split(":")))
-                
-                # Se tiver 3 partes (H:M:S), usa as 3. Se tiver 2 (H:M), assume 0 segundos.
-                if len(time_parts) == 3:
-                    h, m, s = time_parts
-                elif len(time_parts) == 2:
-                    h, m = time_parts
-                    s = 0
-                else:
-                    h, m, s = 0, 0, 0 # Fallback de segurança
-
-                limit_seconds = h * 3600 + m * 60 + s
-                elapsed = calculate_duration(timer["start_time"])
-                total = past.get(cid, 0) + elapsed
-
-                if total >= limit_seconds:
-                    # Registra o log final
-                    supabase.table("time_logs").insert({
-                        "id": str(uuid.uuid4()),
-                        "card_id": cid,
-                        "member_id": timer["member_id"],
-                        "member_name": timer["member_name"],
-                        "duration": elapsed,
-                        "date": now_utc().isoformat(),
-                        "action": "limit_stop"
-                    }).execute()
-
-                    # Deleta o timer ativo
-                    supabase.table("active_timers").delete().eq("card_id", cid).execute()
-                    
-                    # Importante: Anula a variável timer para o Frontend saber que parou AGORA
-                    timer = None 
-            except Exception as e:
-                print(f"Erro ao verificar limite para o card {cid}: {e}")
-        # -----------------------------------
-
+        
+        # A lógica de checagem aqui é visual, a checagem real de parada agora é feita pelo background task
+        
         response[cid] = {
-            "isRunningHere": bool(running_here) and (timer is not None), # Garante que se deletou acima, retorna falso
+            "isRunningHere": bool(running_here),
             "isOtherTimerRunning": bool(running_other),
             "activeTimerData": {
                 "memberId": timer["member_id"],
@@ -127,6 +183,7 @@ def bulk_status(memberId: str, cardIds: str):
 def start_timer(body: StartTimer):
     now = now_utc().isoformat()
 
+    # Se já tem timer rodando, para ele e salva log
     previous = supabase.table("active_timers").select("*").eq("member_id", body.memberId).execute().data
     if previous:
         prev = previous[0]
@@ -138,10 +195,11 @@ def start_timer(body: StartTimer):
             "member_name": prev["member_name"],
             "duration": duration,
             "date": now,
-            "action": "auto_stop"
+            "action": "auto_stop_switch"
         }).execute()
         supabase.table("active_timers").delete().eq("member_id", body.memberId).execute()
 
+    # Inicia novo timer
     supabase.table("active_timers").insert({
         "card_id": body.cardId,
         "member_id": body.memberId,
@@ -155,7 +213,7 @@ def start_timer(body: StartTimer):
 def stop_timer(body: StopTimer):
     active = supabase.table("active_timers").select("*").eq("card_id", body.cardId).eq("member_id", body.memberId).execute().data
     if not active:
-        raise HTTPException(status_code=400)
+        raise HTTPException(status_code=400, detail="Timer não encontrado")
 
     timer = active[0]
     duration = calculate_duration(timer["start_time"])
