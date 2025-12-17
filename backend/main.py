@@ -105,10 +105,8 @@ def bulk_status(memberId: str, cardIds: str):
                 running_other = True
 
         if timer:
-            start_time = timer["start_time"]
-            elapsed = calculate_duration(start_time)
+            elapsed = calculate_duration(timer["start_time"])
             total = elapsed + past.get(cid, 0)
-
             limit_seconds = parse_time_limit(settings_map.get(cid))
 
             if limit_seconds and total >= limit_seconds:
@@ -132,9 +130,9 @@ def bulk_status(memberId: str, cardIds: str):
             "isRunningHere": running_here,
             "isOtherTimerRunning": running_other,
             "activeTimerData": {
-                "member_id": timer["member_id"],
-                "member_name": timer["member_name"],
-                "start_time": timer["start_time"]
+                "memberId": timer["member_id"],
+                "memberName": timer["member_name"],
+                "startTime": timer["start_time"]
             } if timer else None,
             "totalPastSeconds": past.get(cid, 0)
         }
