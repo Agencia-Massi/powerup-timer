@@ -23,16 +23,13 @@ function forceRefresh(t) {
 function fetchBatch() {
   const ids = Array.from(QUEUE)
   QUEUE.clear()
-
   if (!ids.length) return
 
   fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
-      ids.forEach(id => {
-        CACHE[id] = data[id] || null
-      })
+      ids.forEach(id => CACHE[id] = data[id] || null)
       RESOLVERS.forEach(r => r())
       RESOLVERS = []
     })
@@ -58,7 +55,6 @@ function getStatus(cardId, memberId) {
 }
 
 function formatMinutes(seconds) {
-  if (!seconds || isNaN(seconds)) return '0 min'
   return Math.floor(seconds / 60) + ' min'
 }
 
@@ -72,7 +68,7 @@ TrelloPowerUp.initialize({
     ]).then(([card, member, ctx]) => {
       const cardId = card.id
       const memberId = ctx.member
-      const memberName = member.fullName || 'Usuário'
+      const memberName = member.fullName || member.username || 'Usuário'
 
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId] || {}
@@ -119,7 +115,6 @@ TrelloPowerUp.initialize({
 
       return getStatus(cardId, memberId).then(() => {
         const status = CACHE[cardId]
-
         if (!status) return []
 
         if (status.activeTimerData) {
@@ -145,20 +140,6 @@ TrelloPowerUp.initialize({
 
         return []
       })
-    })
-  },
-
-  'card-back-section': function (t) {
-    return t.card('id').then(card => {
-      return {
-        title: 'Gestão de Tempo',
-        icon: `${ASSETS}/img/settings.svg`,
-        content: {
-          type: 'iframe',
-          url: `${ASSETS}/dashboard/dashboard.html?cardId=${card.id}`,
-          height: 520
-        }
-      }
     })
   }
 
