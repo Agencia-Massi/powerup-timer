@@ -4,8 +4,7 @@ const API = 'https://miguel-powerup-trello.jcceou.easypanel.host'
 const ASSETS = 'https://agencia-massi.github.io/powerup-timer'
 
 const CACHE = {}
-let LAST_FETCH = 0
-const TTL = 15000
+const TTL = 1000
 
 let DEBOUNCE = null
 let QUEUE = new Set()
@@ -25,7 +24,7 @@ function fetchBatch() {
   QUEUE.clear()
   if (!ids.length) return
 
-  fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}`)
+  fetch(`${API}/timer/status/bulk?memberId=${CURRENT_MEMBER}&cardIds=${ids.join(',')}&t=${Date.now()}`)
     .then(r => r.json())
     .then(data => {
       LAST_FETCH = Date.now()
