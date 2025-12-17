@@ -70,18 +70,16 @@ TrelloPowerUp.initialize({
       const memberId = ctx.member
       const memberName = member.fullName || member.username || 'Usuário'
 
-      // 1. BOTÃO DE CONFIGURAÇÃO (Agora usando MODAL para ficar grande)
       const settingsButton = {
-        icon: `${ASSETS}/img/settings.svg`, // Tentei usar um icone de settings se tiver, ou use o padrao
+        icon: `${ASSETS}/img/settings.svg`, 
         text: 'Configurar Tempo',
         callback: function(t) {
-          // AQUI ESTAVA A DIFERENÇA: t.popup vs t.modal
           return t.modal({
             title: 'Gestão de Tempo e Logs',
             url: `./dashboard/dashboard.html?cardId=${cardId}`,
-            accentColor: '#0079BF', // Cor do topo da janela (Azul Trello)
-            height: 500, // Altura maior
-            fullscreen: false // Coloque true se quiser que ocupe a tela toda
+            accentColor: '#0079BF', 
+            height: 500, 
+            fullscreen: false 
           });
         }
       };
@@ -90,7 +88,6 @@ TrelloPowerUp.initialize({
         const status = CACHE[cardId] || {}
         let timerButton = null;
 
-        // 2. BOTÃO DO TIMER
         if (status.isRunningHere) {
           timerButton = {
             icon: `${ASSETS}/img/icon.svg`,
@@ -123,7 +120,6 @@ TrelloPowerUp.initialize({
           };
         }
 
-        // RETORNA OS DOIS BOTÕES
         return [timerButton, settingsButton];
       })
     })
@@ -143,9 +139,11 @@ TrelloPowerUp.initialize({
           const now = new Date()
           const running = Math.floor((now - start) / 1000)
           const total = running + (status.totalPastSeconds || 0)
+          
+          const name = status.activeTimerData.memberName || 'Usuário';
 
           return [{
-            text: '⏱️ ' + formatMinutes(total),
+            text: '⏱️ ' + formatMinutes(total) + ' - ' + name,
             color: 'green',
             refresh: 60
           }]
